@@ -251,7 +251,7 @@ public class Game {
 
         // Build the entire screen in memory first
         screenBuffer.append(CURSOR_HOME) // Move cursor to top instead of clearing screen
-                    .append("HP: ").append(player.getHP())
+                    .append("HP: ").append(player.getHP() + "\n")
                     .append(map.toString());
 
         System.out.print(screenBuffer.toString());
@@ -303,8 +303,7 @@ public class Game {
             System.out.print(map + "\n");
     }
 
-    private static void displayHelp() {
-        Scanner helpScanner = new Scanner(System.in);
+    private static void displayHelp(Scanner helpScanner) {
         boolean helpRunning = true;
 
             System.out.println("===============================");
@@ -368,7 +367,6 @@ public class Game {
                     
                 case "back":
                     helpRunning = false;
-                    helpScanner.close();
                     break;
                 
                 default:
@@ -380,6 +378,10 @@ public class Game {
     public static void main(String args[]) throws IOException{
         Path mapsDir = Paths.get("maps");
         Path mapPath;
+
+        // For debugging, you can print the paths
+    System.out.println("Maps dir: " + mapsDir);
+
         Scanner scan = new Scanner(System.in);
 
         System.out.println("\033[1;32mWelcome to Slitheria!\033[0m");
@@ -394,43 +396,43 @@ public class Game {
             System.out.print("\n\033[1mPlay Map: \033[0mPlay <map_number>\n" +
                             "\033[1mMap Preview: \033[0mPreview <map_number>\n" +
                             "\033[1mHelp Page: \033[0mHelp\n");
-                            
-            String[] input = scan.nextLine().split(" ");
+            String input = scan.nextLine();
+            String[] parsed = input.split(" ");
 
-            switch(input[0].toLowerCase()){
+            switch(parsed[0].toLowerCase()){
                 case "play":
-                    if(input.length != 2){
+                    if(parsed.length != 2){
                         System.out.print("Usage: Play <map_number>\n");
                         continue;
                     }
 
                     // Construct path
-                    mapPath = mapsDir.resolve("map" + input[1] + ".txt");
+                    mapPath = mapsDir.resolve("map" + parsed[1] + ".txt");
                     if(Files.exists(mapPath)){
-                        Game game = new Game(new VisualizedMap(playPath));
+                        Game game = new Game(new VisualizedMap(mapPath.toString()));
                         game.play();
                     }else{
-                        System.out.println("Map " + input[1] + " not found!");
+                        System.out.println("Map " + parsed[1] + " not found!");
                     }
                     break;
 
                 case "preview":
-                    if(input.length != 2){
+                    if(parsed.length != 2){
                         System.out.print("Usage: Preview <map_number>\n");
                         continue;
                     }
 
-                    mapPath = mapsDir.resolve("map" + input[1] + ".txt");
+                    mapPath = mapsDir.resolve("map" + parsed[1] + ".txt");
                     if(Files.exists(mapPath)){
                         VisualizedMap previewMap = new VisualizedMap(mapPath.toString());
                         System.out.print(previewMap + "\n");
                     }else{
-                        System.out.println("Map " + input[1] + " not found!");
+                        System.out.println("Map " + parsed[1] + " not found!");
                     }
                     break;
 
                 case "help":
-                    displayHelp();
+                    displayHelp(scan);
                     break;
 
                 case "quit":
