@@ -28,7 +28,7 @@ import java.io.IOException;
 public class VisualizedMap {
     private final Object mapLock = new Object(); // For synchronization
     public char[][] map;
-    private HashMap<Portal, Portal> portals;
+    private HashMap<Portal, Portal> pairedPortals;
     public Player player;
 
     public int icon_x; // x-coordinate of icon
@@ -59,9 +59,9 @@ public class VisualizedMap {
 
     // Constructor initializing a map by reading from a file
     public VisualizedMap(String path){
-        Portal tempPortal = null;
-        player = new Player(3);
-        portals = new HashMap<>();
+        player = new Player();
+        pairedPortals = new HashMap<>();
+        HashMap<Character, Portal> pendingPortals = new HashMap<>();
 
         try(Scanner scanIn = new Scanner(new File(path))){
 
@@ -89,27 +89,25 @@ public class VisualizedMap {
                     if(Character.isDigit(c)){
                         Portal currentPortal = new Portal(currCol, currRow, c);
 
-                        if(tempPortal == null){
-                            // If there are no established portal pairs
-                            tempPortal = currentPortal;
+                        if(!pendingPortals.containsKey(c)){
+                            // If there are no established portal of that ID
+                            pendingPortals.put(c, currentPortal);
                         }else{
                             // Map portals with the same id
-                            if(tempPortal.getID() == c){
-                                Portal firstPortal = tempPortal;
+                            Portal oldPortal = pendingPortals.get(c);
 
-                                // Ensure bidirectionality
-                                portals.put(firstPortal, currentPortal);
-                                portals.put(currentPortal, firstPortal);
-                                tempPortal = null;
-                            }
+                            // Ensure bidirectionality
+                            pairedPortals.put(oldPortal, currentPortal);
+                            pairedPortals.put(currentPortal, oldPortal);
+                            
+                            // Remove from pendingPortals HashMap
+                            pendingPortals.remove(c);
                         }
                     }
                 }
-
                 // Initialize each row
                 map[currRow] = row;
             }
-
         }catch(IOException e){
             e.printStackTrace();
         }
@@ -222,7 +220,7 @@ public class VisualizedMap {
 
     private void handlePortal(int x, int y){
         Portal inPortal = new Portal(x, y, map[y][x]);
-        Portal outPortal = portals.get(inPortal);
+        Portal outPortal = pairedPortals.get(inPortal);
     
         if(outPortal != null){
 
