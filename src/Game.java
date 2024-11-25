@@ -379,9 +379,6 @@ public class Game {
         Path mapsDir = Paths.get("maps");
         Path mapPath;
 
-        // For debugging, you can print the paths
-    System.out.println("Maps dir: " + mapsDir);
-
         Scanner scan = new Scanner(System.in);
 
         System.out.println("\033[1;32mWelcome to Slitheria!\033[0m");

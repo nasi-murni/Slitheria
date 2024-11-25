@@ -10,9 +10,17 @@ About: This is a side-scrolling text-based rogue-like game. It features slitheri
   D - Move right <br/>
   CTRL - Toggle portal teleporting <br/>
   CTRL+Q - Quit game <br/>
-## How to run and play
 
-Fork this repository and open a GitHub Codespaces.
-Then, do the simple Java compilation commands and run it.
-<br/>
-To play, once the **focused window** has loaded, focus on the window to enable inputs to control your icon in the game.
+## Requirements
+- Java 11 or higher
+
+## Quick Start (For Players)
+1. Download `TextGame.jar` from the [Releases](../../releases) page
+2. Make sure you have Java installed
+3. Run the game using one of these methods:
+   - Double-click the JAR file
+   - Or open terminal/command prompt and run:
+     ```
+     java -jar TextGame.jar
+     ```
+4. Once you enter the program, if you initiate the **play** command, then click on the focus window to start playing.
