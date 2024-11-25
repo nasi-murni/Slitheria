@@ -278,22 +278,6 @@ public class VisualizedMap {
             // Move icon to outPortal graphically
             prev = map[outPortal.getY()][outPortal.getX()]; // save value of previous tile
             map[outPortal.getY()][outPortal.getX()] = 'x';
-
-            markPortalPath(inPortal, outPortal);
-        }
-    }
-
-    // Visual effects
-    private void markPortalPath(Portal start, Portal end){
-        // Mark a path betwen portals for visual effect
-        int steps = Math.max(Math.abs(end.getX() - start.getX()),
-                            Math.abs(end.getY() - start.getY()));
-        
-        for(int i = 0; i <= steps; i++){
-            float t = i / (float)steps;
-            int x = (int)(start.getX() + (end.getX() - start.getX()) * t);
-            int y = (int)(start.getY() + (end.getY() - start.getY()) * t);
-            markDirty(x, y);
         }
     }
     

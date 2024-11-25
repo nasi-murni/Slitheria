@@ -65,6 +65,10 @@ public class Game {
     private long lastMoveTime = 0;
     private static final long MOVE_DELAY = 75; // delay in ms
 
+    // Smooth Scrolling
+    private double viewportXf = 0, viewportYf = 0;  // 'f' stands for float/floating-point
+    private static final double SCROLL_SPEED = 0.2; // How fast viewpoint moves tot arget
+
     // Empty Constructor
     public Game(){
         this.map = null;
@@ -242,12 +246,29 @@ public class Game {
         }
     }
 
+    private void updateViewport() {
+        // Calculate where viewport SHOULD be (target) to center on player
+        double targetX = Math.max(0, Math.min(map.icon_x - map.VIEWPORT_WIDTH/2,
+                                            map.getWidth() - map.VIEWPORT_WIDTH));
+        double targetY = Math.max(0, Math.min(map.icon_y - map.VIEWPORT_HEIGHT/2,
+                                            map.getHeight() - map.VIEWPORT_HEIGHT));
+        
+        // Smoothly move current viewport position (viewportXf) toward target
+        viewportXf += (targetX - viewportXf) * SCROLL_SPEED;  // Move 20% of the remaining distance
+        viewportYf += (targetY - viewportYf) * SCROLL_SPEED;
+        
+        // Convert floating positions to integers for actual rendering
+        map.setViewport((int)viewportXf, (int)viewportYf);
+    }
+
     private void render(){
         // Clear screen using ANSI codes with octal
         // Resources: https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797
 
         // Clear buffer
         screenBuffer.setLength(0);
+
+        //updateViewport();
 
         // Build the entire screen in memory first
         screenBuffer.append(CURSOR_HOME) // Move cursor to top instead of clearing screen
@@ -396,7 +417,7 @@ public class Game {
             String[] parsed = input.split(" ");
 
             switch(parsed[0].toLowerCase()){
-                case "0" : Game gamea = new Game(new VisualizedMap("C:\\Users\\bened\\OneDrive\\Documents\\University\\Projects\\Project1-Slitheria\\Slitheria\\maps\\map1.txt")); gamea.play();
+                case "0" : Game gamea = new Game(new VisualizedMap("C:\\Users\\bened\\OneDrive\\Documents\\University\\Projects\\Project1-Slitheria\\Slitheria\\maps\\map3.txt")); gamea.play();
                     break;
                 case "play":
                     if(parsed.length != 2){
