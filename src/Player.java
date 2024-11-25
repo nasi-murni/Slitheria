@@ -7,7 +7,7 @@ public class Player {
     private int hp = 3; // 3 by default
     private boolean isInvincible = false;
     private long invincibilityStartTime = 0;
-    private static final long INVINICIBILITY_DURATION = 1500; // 1500 ms --> 1.5 seconds
+    private static final long INVINICIBILITY_DURATION = 3000; // 3000 ms --> 3 seconds
 
     public int getHP(){
         return hp;

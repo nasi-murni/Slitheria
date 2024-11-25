@@ -7,7 +7,28 @@ bin/
 .idea/
 .vscode/
 *.iml
+*.iws
+*.ipr
+.settings/
+.classpath
+.project
 
-# Operating System files
+# OS-specific files
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Backup files
+*~
+*.bak
+*.swp
+
+# Debug logs
+*.log
+
+# Runtime directories
+/target/
+/out/
+
+# Generated maps (uncomment if you want to track maps in git)
+# /maps/*.txt

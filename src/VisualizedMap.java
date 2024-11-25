@@ -36,10 +36,14 @@ public class VisualizedMap {
     public char prev = '+';  // to restore symbols
     public boolean gameWon = false;
     public boolean ctrlPressed = false;
-
     private StringBuilder mapBuffer = new StringBuilder();
 
-    // CONSTANTS
+    private int viewportX = 0, viewportY = 0;
+    public final int VIEWPORT_WIDTH = 40;
+    public final int VIEWPORT_HEIGHT = 20;
+    private boolean[][] dirty;
+
+
     private static final int[] DISTINCT_PORTAL_COLORS = {
         226,  // Bright Yellow
         51,   // Bright Cyan
@@ -50,12 +54,6 @@ public class VisualizedMap {
         214,  // Orange
         147,  // Medium Purple
     };
-
-    // Constructor for an empty map
-    public VisualizedMap(){
-        map = null;
-        player = null;
-    }
 
     // Constructor initializing a map by reading from a file
     public VisualizedMap(String path){
@@ -69,8 +67,10 @@ public class VisualizedMap {
             int numRow = scanIn.nextInt(); scanIn.nextLine();
             int numCol = scanIn.nextInt(); scanIn.nextLine();
 
-            // Initialize map, it will be rectangular
+            // Initialize map and dirty, it will be rectangular
             map = new char[numRow][numCol];
+            dirty = new boolean[numRow][numCol];
+            markAllDirty(); // Initially all tiles are dirty
 
             // Iterate through each line of the file and parse map data
             for(int currRow = 0; scanIn.hasNextLine(); currRow++){
@@ -113,14 +113,22 @@ public class VisualizedMap {
         }
     }
 
-    // Constructor for an initialized map
-    public VisualizedMap(int row_size, int col_size){
-        map = new char[row_size][col_size];
+    // -- Getters -- 
+    public int getWidth(){
+        return map[0].length;
     }
 
+    public int getHeight(){
+        return map.length;
+    }
+    
     public void right(){
         synchronized(mapLock){
             if(validToMove(icon_x + 1, icon_y)){
+                // Mark affected tiles as dirty
+                markDirty(icon_x, icon_y);
+                markDirty(icon_x + 1, icon_y);
+
                 char nextTile = map[icon_y][icon_x + 1]; // save the tile we're about to move onto
 
                 // Teleport if and only if ctrl is pressed and nextTile is a digit
@@ -128,12 +136,18 @@ public class VisualizedMap {
                     handlePortal(icon_x + 1, icon_y);
                     return;
                 }
+                
                 // Restore tile we were standing on
                 map[icon_y][icon_x] = prev;
                 // Move icon and save new tile
                 map[icon_y][++icon_x] = 'x';
                 prev = nextTile;
                 handleSpecialTile(prev);
+
+                // Check if we need to update viewport dirty area, i.e. if near viewport edge
+                if(icon_x >= viewportX + VIEWPORT_WIDTH - 5 || icon_x <= viewportX + 5 ||
+                    icon_y >= viewportY + VIEWPORT_HEIGHT - 2 || icon_y <= viewportY + 2)
+                    markDirtyViewport();
             }
         }
     }
@@ -141,6 +155,10 @@ public class VisualizedMap {
     public void left(){
         synchronized(mapLock){
             if(validToMove(icon_x - 1, icon_y)){
+                // Mark affected tiles as dirty
+                markDirty(icon_x, icon_y);
+                markDirty(icon_x - 1, icon_y);
+
                 char nextTile = map[icon_y][icon_x - 1]; // save the tile we're about to move onto
 
                 // Teleport if and only if ctrl is pressed and nextTile is a digit
@@ -148,12 +166,17 @@ public class VisualizedMap {
                     handlePortal(icon_x - 1, icon_y);
                     return;
                 }
-                    // Restore tile we were standing on
-                    map[icon_y][icon_x] = prev;
-                    // Move icon and save new tile
-                    map[icon_y][--icon_x] = 'x';
-                    prev = nextTile;
-                    handleSpecialTile(prev);
+                // Restore tile we were standing on
+                map[icon_y][icon_x] = prev;
+                // Move icon and save new tile
+                map[icon_y][--icon_x] = 'x';
+                prev = nextTile;
+                handleSpecialTile(prev);
+
+                // Check if we need to update viewport dirty area, i.e. if near viewport edge
+                if(icon_x >= viewportX + VIEWPORT_WIDTH - 5 || icon_x <= viewportX + 5 ||
+                icon_y >= viewportY + VIEWPORT_HEIGHT - 2 || icon_y <= viewportY + 2)
+                markDirtyViewport();
             }
         }
     }
@@ -161,6 +184,10 @@ public class VisualizedMap {
     public void up(){
         synchronized(mapLock){
             if(validToMove(icon_x, icon_y - 1)){
+                // Mark affected tiles as dirty
+                markDirty(icon_x, icon_y);
+                markDirty(icon_x, icon_y - 1);
+
                 char nextTile = map[icon_y - 1][icon_x]; // save the tile we're about to move onto
 
                 // Teleport if and only if ctrl is pressed and nextTile is a digit
@@ -168,12 +195,18 @@ public class VisualizedMap {
                     handlePortal(icon_x, icon_y - 1);
                     return;
                 }
-                    // Restore tile we were standing on
-                    map[icon_y][icon_x] = prev;
-                    // Move icon and save new tile
-                    map[--icon_y][icon_x] = 'x';
-                    prev = nextTile;
-                    handleSpecialTile(prev);
+                
+                // Restore tile we were standing on
+                map[icon_y][icon_x] = prev;
+                // Move icon and save new tile
+                map[--icon_y][icon_x] = 'x';
+                prev = nextTile;
+                handleSpecialTile(prev);
+                
+                // Check if we need to update viewport dirty area, i.e. if near viewport edge
+                if(icon_x >= viewportX + VIEWPORT_WIDTH - 5 || icon_x <= viewportX + 5 ||
+                    icon_y >= viewportY + VIEWPORT_HEIGHT - 2 || icon_y <= viewportY + 2)
+                    markDirtyViewport();
             }
         }
     }
@@ -181,6 +214,10 @@ public class VisualizedMap {
     public void down(){
         synchronized(mapLock){
             if(validToMove(icon_x, icon_y + 1)){
+                // Mark affected tiles as dirty
+                markDirty(icon_x, icon_y);
+                markDirty(icon_x, icon_y + 1);
+
                 char nextTile = map[icon_y + 1][icon_x]; // save the tile we're about to move onto
 
                 // Teleport if and only if ctrl is pressed and nextTile is a digit
@@ -188,12 +225,16 @@ public class VisualizedMap {
                     handlePortal(icon_x, icon_y + 1);
                     return;
                 }
-                    // Restore tile we were standing on
-                    map[icon_y][icon_x] = prev;
-                    // Move icon and save new tile
-                    map[++icon_y][icon_x] = 'x';
-                    prev = nextTile;
-                    handleSpecialTile(prev);
+                // Restore tile we were standing on
+                map[icon_y][icon_x] = prev;
+                // Move icon and save new tile
+                map[++icon_y][icon_x] = 'x';
+                prev = nextTile;
+                handleSpecialTile(prev);
+
+                // Check if we need to update viewport dirty area, i.e. if near viewport edge
+                if(icon_x >= viewportX + VIEWPORT_WIDTH - 5 || icon_x <= viewportX + 5)
+                    markDirtyViewport();
             }
         }
     }
@@ -223,6 +264,8 @@ public class VisualizedMap {
         Portal outPortal = pairedPortals.get(inPortal);
     
         if(outPortal != null){
+            // Mark entire viewport as dirty since teleportation changes view significantly
+            markDirtyViewport();
 
             // Restore tile we were standing on
             map[icon_y][icon_x] = prev;
@@ -231,46 +274,116 @@ public class VisualizedMap {
             icon_x = outPortal.getX();
             icon_y = outPortal.getY();
         
+            
             // Move icon to outPortal graphically
             prev = map[outPortal.getY()][outPortal.getX()]; // save value of previous tile
             map[outPortal.getY()][outPortal.getX()] = 'x';
+
+            markPortalPath(inPortal, outPortal);
         }
     }
 
+    // Visual effects
+    private void markPortalPath(Portal start, Portal end){
+        // Mark a path betwen portals for visual effect
+        int steps = Math.max(Math.abs(end.getX() - start.getX()),
+                            Math.abs(end.getY() - start.getY()));
+        
+        for(int i = 0; i <= steps; i++){
+            float t = i / (float)steps;
+            int x = (int)(start.getX() + (end.getX() - start.getX()) * t);
+            int y = (int)(start.getY() + (end.getY() - start.getY()) * t);
+            markDirty(x, y);
+        }
+    }
+    
+    // ---------------------------------------------------
+    // --------- Marking Methods ---------
+    private void markDirty(int x, int y){
+        if(x >= 0 && x < map[0].length && y >= 0 && y < map.length){
+            dirty[y][x] = true;
+        }
+    }
+
+    private void markAllDirty(){
+        for(int i = 0; i < dirty.length; i++){
+            Arrays.fill(dirty[i], true);
+        }
+    }
+
+    private void markDirtyViewport(){
+        int startRow = Math.max(0, viewportY);
+        int endRow = Math.min(map.length, viewportY + VIEWPORT_HEIGHT);
+        int startCol = Math.max(0, viewportX);
+        int endCol = Math.min(map[0].length, viewportX + VIEWPORT_WIDTH);
+
+        for(int row = startRow; row < endRow; row++){
+            for(int col = startCol; col < endCol; col++){
+                dirty[row][col] = true;
+            }
+        }
+    }
+
+    public void setViewport(int x, int y){
+        this.viewportX = x;
+        this.viewportY = y;
+    }
+    
+    // --------- End of marking methods ---------
+    // ---------------------------------------------------
+
+    // --------- Rendering Methods ---------
     public String toString(){
         synchronized(mapLock){
             mapBuffer.setLength(0); // Clear buffer
-            for(int row = 0; row < map.length; row++){
-                for(int col = 0; col < map[0].length; col++){
-                    char c = map[row][col];
 
-                    if(Character.isDigit(c)){
-                        int colorNd = c - '0'; // parsing char to int with offset of 1 from 0
-                        int colorCode = DISTINCT_PORTAL_COLORS[colorNd]; 
-                        mapBuffer.append("\033[38;5;" + colorCode + "m|\033[0m ");
-                    }else{
-                        switch(c){
-                        case 'x':
-                            if(prev == '*') mapBuffer.append("\033[1;37m" + c + "\033[0m ");
-                            else mapBuffer.append("\033[1;36m" + c + "\033[0m ");
-                            break;
-                        case '#':
-                            mapBuffer.append("\033[38;5;255m" + c + "\033[0m ");
-                            break;
-                        case ':':
-                            mapBuffer.append("\033[38;5;46m" + c + "\033[0m ");
-                            break;
-                        case '*':
-                            mapBuffer.append("\033[1;31m" + c + "\033[0m ");
-                            break;
-                        default:
-                            mapBuffer.append("\033[38;5;234m+ \033[0m");
-                        }
+            // Calculate viewport position centered on player
+            viewportX = Math.max(0, Math.min(icon_x - VIEWPORT_WIDTH/2, 
+                                            map[0].length - VIEWPORT_WIDTH));
+            viewportY = Math.max(0, Math.min(icon_y - VIEWPORT_HEIGHT/2,
+                                            map.length - VIEWPORT_WIDTH));
+
+            // Only render viewport area
+            for(int row = viewportY; row < viewportY + VIEWPORT_HEIGHT && row < map.length; row++){
+                for(int col = viewportX; col < viewportX + VIEWPORT_WIDTH && col < map[0].length; col++){
+                    if(dirty[row][col]){
+                    renderTile(col, row);
+                    dirty[row][col] = false;
                     }
                 }
-                if(row < map.length - 1) mapBuffer.append("\n");
+                if(row < viewportY + VIEWPORT_HEIGHT - 1) mapBuffer.append("\n");
             }
             return mapBuffer.toString();
+        }
+    }
+
+    public void renderTile(int x, int y){
+        char c = map[y][x];
+        if(Character.isDigit(c)){
+            int colorNd = c - '0'; // parsing char to int with offset of 1 from 0
+            int colorCode = DISTINCT_PORTAL_COLORS[colorNd]; 
+            mapBuffer.append("\033[38;5;" + colorCode + "m|\033[0m ");
+        }else{
+            switch(c){
+            case 'x':
+                if(player.isInvincible()) mapBuffer.append("\033[1;37m" + c + "\033[0m ");
+                else mapBuffer.append("\033[1;36m" + c + "\033[0m ");
+                break;
+            case '#':
+                mapBuffer.append("\033[38;5;255m" + c + "\033[0m ");
+                break;
+            case ':':
+                mapBuffer.append("\033[38;5;226m" + c + "\033[0m ");
+                break;
+            case '*':
+                mapBuffer.append("\033[1;31m" + c + "\033[0m ");
+                break;
+            case 'S':
+                mapBuffer.append("\33[38;5;46m+ \033[0m");
+                break;
+            default:
+                mapBuffer.append("\033[38;5;234m+ \033[0m");
+            }
         }
     }
 }

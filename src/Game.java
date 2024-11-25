@@ -135,7 +135,7 @@ public class Game {
     // Initializing the thread
     public void gameLoop(){
         long before = System.currentTimeMillis();
-        final double NS_PER_UPDATE = ONE_BILLION / 10; // 10 updates per second -- nanoseconds per update
+        final double NS_PER_UPDATE = ONE_BILLION / 60; // 60 updates per second -- nanoseconds per update
         double delta = 0;
 
         // Initial render
@@ -318,7 +318,7 @@ public class Game {
             System.out.println("  A - Move left");
             System.out.println("  S - Move down");
             System.out.println("  D - Move right");
-            System.out.println("  CTRL - Toggle portal teleporting");
+            System.out.println("  CTRL - Hold for portal teleporting");
             System.out.println("  CTRL+Q - Quit game");
             System.out.println("\n\033[1;37mMap Tiles:\033[0m");
             System.out.println("  x - Player");
@@ -396,6 +396,8 @@ public class Game {
             String[] parsed = input.split(" ");
 
             switch(parsed[0].toLowerCase()){
+                case "0" : Game gamea = new Game(new VisualizedMap("C:\\Users\\bened\\OneDrive\\Documents\\University\\Projects\\Project1-Slitheria\\Slitheria\\maps\\map1.txt")); gamea.play();
+                    break;
                 case "play":
                     if(parsed.length != 2){
                         System.out.print("Usage: Play <map_number>\n");
