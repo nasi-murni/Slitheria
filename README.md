@@ -1,8 +1,9 @@
 ## Description
 
-Simple text-based game that act as a stepping stone for my computer science career.
-Additionally, an experiment on interacting with Java syntax to develop the logic for a simple game.
+Simple text-based game with threading and synchronization for keyboard-pressing input. <br/>
+Unfinished.
 
-## Dependencies
+## How to run
 
-None as of yet.
+Fork this repository and open a GitHub Codespaces.
+Then, do the simple Java compilation commands and run it.
