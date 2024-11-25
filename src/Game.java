@@ -29,9 +29,14 @@ import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.KeyEvent;
 import java.awt.EventQueue;
+import java.awt.GraphicsEnvironment;
 
 // Provides a focused window
 import javax.swing.JFrame;
+
+// For console-based input handling
+import java.awt.GraphicsEnvironment;
+import java.io.Console;
 
 // Paths for OS-independent path handling
 import java.nio.file.Path;
@@ -80,6 +85,31 @@ public class Game {
 
     // Setting up all the keyboard presses
     private void setupKeyboardListener(){
+        if(GraphicsEnvironment.isHeadless()){
+            // Use console-based input handling
+            Thread inputThread = new Thread(() -> {
+                Console console = System.console();
+                if(console != null){
+                    while (running){
+                        try{
+                            if(System.in.available() > 0){
+                                int key = System.in.read();
+                                synchronized (Game.class){
+                                    switch(Character.toLowerCase(key)){
+                                        case 'w': wPressed = true; break;
+                                        case 'a': aPressed = true; break;
+                                        case 's': sPressed = true; break;
+                                        case 'd': dPressed = true; break;
+                                        case 'q': qPressed = true; break;
+                                    }
+                                }
+                            }
+                        }catch(IOException e){};
+                    }
+                }
+            });
+            inputThread.start();
+        }
         // Create a window to maintain keyboard focus
         frame = new JFrame("Game Window");
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
