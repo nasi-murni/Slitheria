@@ -45,6 +45,7 @@ public class Game {
     private volatile boolean aPressed = false;
     private volatile boolean sPressed = false;
     private volatile boolean dPressed = false;
+    private volatile boolean qPressed = false;
     private volatile boolean ctrlPressed = false;
 
     // Empty Constructor
@@ -93,8 +94,8 @@ public class Game {
                                 case KeyEvent.VK_A: aPressed = true; break;
                                 case KeyEvent.VK_S: sPressed = true; break;
                                 case KeyEvent.VK_D: dPressed = true; break;
-                                case KeyEvent.VK_Q: running = false; break;
-                                case KeyEvent.VK_CONTROL: ctrlPressed = true; break;
+                                case KeyEvent.VK_Q: qPressed = true; break;
+                                case KeyEvent.VK_CONTROL: ctrlPressed = true; map.ctrlPressed = true; break;
                             }
                             break;
                         case KeyEvent.KEY_RELEASED:
@@ -103,7 +104,8 @@ public class Game {
                                 case KeyEvent.VK_A: aPressed = false; break;
                                 case KeyEvent.VK_S: sPressed = false; break;
                                 case KeyEvent.VK_D: dPressed = false; break;
-                                case KeyEvent.VK_CONTROL: ctrlPressed = false; break;
+                                case KeyEvent.VK_Q: qPressed = false; break;
+                                case KeyEvent.VK_CONTROL: ctrlPressed = false; map.ctrlPressed = false; break;
                             }
                             break;
                     }
@@ -118,12 +120,17 @@ public class Game {
         long lastTime = System.currentTimeMillis();
         final long FRAME_TIME = 1000 / 30; // 30 FPS
 
-        // Game will stop if and only if CTRL + Q is pressed
-        while(!ctrlPressed && running){
+        // Game continutes while running is true
+        while(running){
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastTime >= FRAME_TIME){
                 update();
                 lastTime = currentTime;
+
+                // Check game end conditions
+                if(!running || (ctrlPressed && qPressed) || player.getHP() <= 0 || map.gameWon) {
+                    break;  // Exit loop if any end condition is met
+                }
             }
 
             // Small sleep to prevent CPU overuse
@@ -134,6 +141,38 @@ public class Game {
                 break;
             }
         }
+
+        frame.dispose();
+        if(ctrlPressed && qPressed){
+
+            System.out.print("Succesfully quitted. Type 'Help' for more commands.\n");
+
+        }else if(player.getHP() <= 0){
+
+            System.out.print("\033[1;31mOh no");
+            for(int i = 0; i < 3; i++){
+                try{
+                    Thread.sleep(1000);
+                    System.out.print(".");
+                }catch(InterruptedException e){
+                    e.printStackTrace();
+                }
+            }
+            try{Thread.sleep(1000);}catch(InterruptedException e){};
+            System.out.print(" You've died.\033[0m\n");
+            try{Thread.sleep(1000);}catch(InterruptedException e){};
+
+            System.out.print("Restart? Type 'Help' for more commands.\n");
+
+        }else if(map.gameWon){
+
+            System.out.print("\033[32mCongratulations! ");
+            try{Thread.sleep(1000);}catch(InterruptedException e){};
+            System.out.print("You've won!\033[0m\n");
+            try{Thread.sleep(1000);}catch(InterruptedException e){};
+
+            System.out.print("Try our other levels! Type 'Help' for more commands.\n");
+        }
     }
 
     private void update(){
@@ -141,6 +180,7 @@ public class Game {
         // that may be modified by the keyboard listener thread
         synchronized (Game.class){
             boolean moved = false;
+
             if(wPressed && map.validToMove(map.icon_x, map.icon_y - 1)){
                 map.up();
                 moved = true;
@@ -157,38 +197,7 @@ public class Game {
                 map.right();
                 moved = true;
             }
-            
-            if(moved){
-                render();
-
-                if(player.getHP() <= 0 && !map.gameWon){
-                    running = false;
-                    frame.dispose();
-                    System.out.print("\033[1;31mOh no");
-                    for(int i = 0; i < 3; i++){
-                        try{
-                            Thread.sleep(1000);
-                            System.out.print(".");
-                        }catch(InterruptedException e){
-                            e.printStackTrace();
-                        }
-                    }
-                    try{Thread.sleep(1000);}catch(InterruptedException e){};
-                    System.out.print(" You've died.\033[0m\n");
-                    try{Thread.sleep(1000);}catch(InterruptedException e){};
-    
-                    System.out.print("Restart? Type 'Help' for more commands.\n");
-                }else if(map.gameWon && player.getHP() > 0){
-                    running = false;
-                    frame.dispose();
-                    System.out.print("\033[32mCongratulations! ");
-                    try{Thread.sleep(1000);}catch(InterruptedException e){};
-                    System.out.print("You've won!\033[0m\n");
-                    try{Thread.sleep(1000);}catch(InterruptedException e){};
-
-                    System.out.print("Try our other levels! Type 'Help' for more commands.\n");
-                }
-            }
+            if(moved) render();
         }
     }
 
@@ -248,43 +257,96 @@ public class Game {
     }
 
     private static void displayHelp() {
-        System.out.println("\n\033[1m=== Game Help ===\033[0m");
-        System.out.println("Commands:");
-        System.out.println("  Play <number>   - Start game with specified map");
-        System.out.println("  Preview <number> - Show preview of specified map");
-        System.out.println("  Help            - Display this help message");
-        System.out.println("  Quit            - Exit the game");
-        System.out.println("\nGame Controls:");
-        System.out.println("  W - Move up");
-        System.out.println("  A - Move left");
-        System.out.println("  S - Move down");
-        System.out.println("  D - Move right");
-        System.out.println("  CTRL+Q - Quit game");
-        System.out.println("\nMap Symbols:");
-        System.out.println("  x - Player");
-        System.out.println("  # - Wall");
-        System.out.println("  : - Goal");
-        System.out.println("  | - Portal");
-        System.out.println("  + - Empty space\n");
-    }
+        Scanner helpScanner = new Scanner(System.in);
+        boolean helpRunning = true;
+
+            System.out.println("===============================");
+            System.out.println("\033[1;32mGame Help\033[0m");
+            System.out.println("\033[1;37mCommands:\033[0m");
+            System.out.println("  Play <number>   - Start game with specified map");
+            System.out.println("  Preview <number> - Show preview of specified map");
+            System.out.println("  Help            - Display this help message");
+            System.out.println("  Quit            - Exit the game");
+            System.out.println("\n\033[1;37mGame Controls:\033[0m");
+            System.out.println("  W - Move up");
+            System.out.println("  A - Move left");
+            System.out.println("  S - Move down");
+            System.out.println("  D - Move right");
+            System.out.println("  CTRL - Toggle portal teleporting");
+            System.out.println("  CTRL+Q - Quit game");
+            System.out.println("\n\033[1;37mMap Tiles:\033[0m");
+            System.out.println("  x - Player");
+            System.out.println("  + - Empty space");
+            System.out.println("  # - Wall");
+            System.out.println("  : - Goal");
+            System.out.println("  * - Spike");
+            System.out.println("  | - Portal");
+            System.out.println();
+            System.out.println("Type -h <map_tile> for additional information.");
+            System.out.println("Type 'back' to return to main menu.");
+
+        while(helpRunning) {
+            String[] inputs = helpScanner.nextLine().split(" ");
+            
+            switch(inputs[0]) {
+                case "-h":
+                    if(inputs.length != 2) {
+                        System.out.println("Usage: -h <map_tile>");
+                        continue;
+                    }
+                    
+                    switch(inputs[1].charAt(0)) {
+                        case 'x':
+                            System.out.println("'x' - Player icon - The very creation of your soul. How does it feel being entrapped inside a game?");
+                            break;
+                        case '+':
+                            System.out.println("'+' - Empty space - But is it really empty though? It's a plus sign, but you're able to phase through it...");
+                            break;
+                        case '#':
+                            System.out.println("'#' - Wall - This is an impassable object on the map! Or is it..?");
+                            break;
+                        case ':':
+                            System.out.println("':' - Goal - I'm sure you know what this is.");
+                            break;
+                        case '|':
+                            System.out.println("'|' - Portal - A mysterious object that can teleport oneself from one point to another. As long as the player knows the truth...");
+                            break;
+                        case '*':
+                            System.out.println("'*' - Spike - The spikiest object in the world of printable characters. Don't mess with them, they're temperamental.");
+                            break;
+                        default:
+                            System.out.println("Invalid input. Valid tiles are: 'x', '+', '#', ':', '|', and '*'.");
+                    }
+                    break;
+                    
+                case "back":
+                    helpRunning = false;
+                    helpScanner.close();
+                    break;
+                
+                default:
+                    System.out.println("Invalid input. Use '-h <map_tile>' for tile information or 'back' to return.");
+            }
+        }
+     }
+
     public static void main(String args[]) throws IOException{
         String basePath = new String("C:\\Users\\bened\\OneDrive\\Documents\\University\\Projects\\Text Game\\maps\\map");
         Scanner scan = new Scanner(System.in);
 
-        System.out.println("\033[1;31mW\033[1;33me\033[1;32ml\033[1;36mc\033[1;34mo\033[1;35mm\033[1;31me\033[0m" +
-                                " \033[1;33mt\033[1;32mo\033[0m" +
-                                " \033[1;36mm\033[1;34my\033[0m" +
-                                " \033[1;35mg\033[1;31ma\033[1;33mm\033[1;32me\033[1;36m!\033[0m");
+        System.out.println("\033[1;32mWelcome to Slitheria!\033[0m");
 
             System.out.print("\033[1mAbout:\033[0m This is a side-scrolling text-based game that requires precision and skill\n" +
                             "       which includes challenging combat against enemies and projectiles,\n" + 
                             "       as well as power-ups that will help in beating each and every level.\n" +
-                            "       The objective of the game is to slither your way through to the goal.\n\n" +
-                            "\033[1mPlay Map: \033[0mPlay <map_number>\n" +
-                            "\033[1mMap Preview: \033[0mPreview <map_number>\n" +
-                            "\033[1mHelp Page: \033[0mHelp\n");
+                            "       The objective of the game is to slither your way through to the goal.\n\n");
 
         while(true){
+            System.out.print("===============================");
+            System.out.print("\n\033[1mPlay Map: \033[0mPlay <map_number>\n" +
+                            "\033[1mMap Preview: \033[0mPreview <map_number>\n" +
+                            "\033[1mHelp Page: \033[0mHelp\n");
+                            
             String[] input = scan.nextLine().split(" ");
 
             switch(input[0].toLowerCase()){
@@ -321,6 +383,7 @@ public class Game {
 
                 default:
                     System.out.print("Invalid input. Type 'Help' for commands.\n");
+                
             }
         }
     }

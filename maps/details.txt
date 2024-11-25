@@ -3,3 +3,8 @@ One-line description of the map
 number of rows
 number of columns
 map details (may span up to however many lines)
+
+
+x represents icon
+special symbols represent entities
+portals are represented as (0-9)
