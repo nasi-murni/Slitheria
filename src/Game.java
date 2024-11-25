@@ -387,7 +387,7 @@ public class Game {
         System.out.println("\033[1;32mWelcome to Slitheria!\033[0m");
 
             System.out.print("\033[1mAbout:\033[0m This is a side-scrolling text-based rogue-like game.\n" + 
-                            "       It features slithering your way through the tight abyss of Slitheria,\n" + 
+                            "       It features slithering your way through the tight abyss of \033[1mSlitheria\033[0m,\n" + 
                             "       where you must utilize your surrounding to get to the goal.\n\n");
 
         while(true){
