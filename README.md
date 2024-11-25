@@ -1,6 +1,7 @@
 ## Description
 
-Simple text-based game with threading and synchronization for keyboard-pressing input.
+Simple text-based game with threading and synchronization for keyboard-pressing input. <br/>
+Unfinished.
 
 ## How to run
 
