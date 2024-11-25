@@ -33,11 +33,17 @@ import java.awt.EventQueue;
 // Provides a focused window
 import javax.swing.JFrame;
 
+// Paths for OS-independent path handling
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.Files;
+
 public class Game {
     // Composition
     public JFrame frame;
     public VisualizedMap map;
     public Player player;
+
 
     // volatile imposed for thread safety (synchronization lock)
     private volatile boolean running = true;
@@ -47,6 +53,17 @@ public class Game {
     private volatile boolean dPressed = false;
     private volatile boolean qPressed = false;
     private volatile boolean ctrlPressed = false;
+
+    // Add buffer for double buffering (smoother rendering)
+    private StringBuilder screenBuffer = new StringBuilder();
+    private static final String CLEAR_SCREEN = "\033[H\033[2J";
+    private static final String CURSOR_HOME = "\033[H";
+
+    // Rendering
+    private final double ONE_BILLION = 1000000000.00;
+    private final int MS_TO_NS_SCALAR = 1000000;
+    private long lastMoveTime = 0;
+    private static final long MOVE_DELAY = 75; // delay in ms
 
     // Empty Constructor
     public Game(){
@@ -117,30 +134,42 @@ public class Game {
 
     // Initializing the thread
     public void gameLoop(){
-        long lastTime = System.currentTimeMillis();
-        final long FRAME_TIME = 1000 / 30; // 30 FPS
+        long before = System.currentTimeMillis();
+        final double NS_PER_UPDATE = ONE_BILLION / 10; // 10 updates per second -- nanoseconds per update
+        double delta = 0;
+
+        // Initial render
+        System.out.print(CLEAR_SCREEN);
+        render();
 
         // Game continutes while running is true
         while(running){
-            long currentTime = System.currentTimeMillis();
-            if (currentTime - lastTime >= FRAME_TIME){
-                update();
-                lastTime = currentTime;
+            long now = System.currentTimeMillis();
+            delta += (now - before) * MS_TO_NS_SCALAR / NS_PER_UPDATE;
+            before = now;
 
-                // Check game end conditions
-                if(!running || (ctrlPressed && qPressed) || player.getHP() <= 0 || map.gameWon) {
-                    break;  // Exit loop if any end condition is met
-                }
+            if (delta >= 1){
+                updateGame();
+            }
+            
+            render();
+
+            // Check game end conditions
+            if(!running || (ctrlPressed && qPressed) || player.getHP() <= 0 || map.gameWon) {
+                break;  // Exit loop if any end condition is met
             }
 
             // Small sleep to prevent CPU overuse
             try{
-                Thread.sleep(50);
+                Thread.sleep(1);
             } catch (InterruptedException e){
                 Thread.currentThread().interrupt();
+                System.out.println();
                 break;
             }
         }
+        
+        System.out.println();
 
         frame.dispose();
         if(ctrlPressed && qPressed){
@@ -175,40 +204,58 @@ public class Game {
         }
     }
 
-    private void update(){
+    /*
+     * Function to oversee all updates: 
+     * keyboard presses, symbol swaps, entities,
+     * map rendering
+     */
+    private void updateGame() {
         // Requiring synchronization since we are reading the key states
         // that may be modified by the keyboard listener thread
-        synchronized (Game.class){
+        synchronized (Game.class) {
+            long currentTime = System.currentTimeMillis();
             boolean moved = false;
 
-            if(wPressed && map.validToMove(map.icon_x, map.icon_y - 1)){
-                map.up();
-                moved = true;
+            // Check for movement only after delay
+            if (currentTime - lastMoveTime >= MOVE_DELAY) {
+                if (wPressed && map.validToMove(map.icon_x, map.icon_y - 1)) {
+                    map.up();
+                    moved = true;
+                }
+                if (aPressed && map.validToMove(map.icon_x - 1, map.icon_y)) {
+                    map.left();
+                    moved = true;
+                }
+                if (sPressed && map.validToMove(map.icon_x, map.icon_y + 1)) {
+                    map.down();
+                    moved = true;
+                }
+                if (dPressed && map.validToMove(map.icon_x + 1, map.icon_y)) {
+                    map.right();
+                    moved = true;
+                }
+
+                if (moved) {
+                    lastMoveTime = currentTime;
+                }
             }
-            if(aPressed && map.validToMove(map.icon_x - 1, map.icon_y)){
-                map.left();
-                moved = true;
-            }
-            if(sPressed && map.validToMove(map.icon_x, map.icon_y + 1)){
-                map.down();
-                moved = true;
-            }
-            if(dPressed && map.validToMove(map.icon_x + 1, map.icon_y)){
-                map.right();
-                moved = true;
-            }
-            if(moved) render();
         }
     }
 
     private void render(){
         // Clear screen using ANSI codes with octal
         // Resources: https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797
-        System.out.print("\033[H\033[2J");
-        System.out.flush(); // flush any buffered input
 
-        // Print game state
-        System.out.printf("HP: %d\n%s\n", player.getHP(), map);
+        // Clear buffer
+        screenBuffer.setLength(0);
+
+        // Build the entire screen in memory first
+        screenBuffer.append(CURSOR_HOME) // Move cursor to top instead of clearing screen
+                    .append("HP: ").append(player.getHP())
+                    .append(map.toString());
+
+        System.out.print(screenBuffer.toString());
+        System.out.flush(); // flush any buffered input
     }
 
     private void play(){
@@ -331,7 +378,8 @@ public class Game {
      }
 
     public static void main(String args[]) throws IOException{
-        String basePath = new String("C:\\Users\\bened\\OneDrive\\Documents\\University\\Projects\\Text Game\\maps\\map");
+        Path mapsDir = Paths.get("maps");
+        Path mapPath;
         Scanner scan = new Scanner(System.in);
 
         System.out.println("\033[1;32mWelcome to Slitheria!\033[0m");
@@ -356,9 +404,14 @@ public class Game {
                         continue;
                     }
 
-                    String playPath = basePath + input[1] + ".txt";
-                    Game game = new Game(new VisualizedMap(playPath));
-                    game.play();
+                    // Construct path
+                    mapPath = mapsDir.resolve("map" + input[1] + ".txt");
+                    if(Files.exists(mapPath)){
+                        Game game = new Game(new VisualizedMap(playPath));
+                        game.play();
+                    }else{
+                        System.out.println("Map " + input[1] + " not found!");
+                    }
                     break;
 
                 case "preview":
@@ -367,9 +420,13 @@ public class Game {
                         continue;
                     }
 
-                    String previewPath = basePath + input[1] + ".txt";
-                    VisualizedMap previewMap = new VisualizedMap(previewPath);
-                    System.out.print(previewMap + "\n");
+                    mapPath = mapsDir.resolve("map" + input[1] + ".txt");
+                    if(Files.exists(mapPath)){
+                        VisualizedMap previewMap = new VisualizedMap(mapPath.toString());
+                        System.out.print(previewMap + "\n");
+                    }else{
+                        System.out.println("Map " + input[1] + " not found!");
+                    }
                     break;
 
                 case "help":

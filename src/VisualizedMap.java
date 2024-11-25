@@ -26,15 +26,30 @@ import java.io.File;
 import java.io.IOException;
 
 public class VisualizedMap {
-    private final Object mapLock = new Object();
+    private final Object mapLock = new Object(); // For synchronization
     public char[][] map;
     private HashMap<Portal, Portal> portals;
     public Player player;
+
     public int icon_x; // x-coordinate of icon
     public int icon_y; // y-coordinate of icon
     public char prev = '+';  // to restore symbols
     public boolean gameWon = false;
     public boolean ctrlPressed = false;
+
+    private StringBuilder mapBuffer = new StringBuilder();
+
+    // CONSTANTS
+    private static final int[] DISTINCT_PORTAL_COLORS = {
+        226,  // Bright Yellow
+        51,   // Bright Cyan
+        21,   // Bright Blue
+        93,   // Purple
+        183,  // Pink
+        154,  // Lime
+        214,  // Orange
+        147,  // Medium Purple
+    };
 
     // Constructor for an empty map
     public VisualizedMap(){
@@ -197,12 +212,10 @@ public class VisualizedMap {
         switch(tile){
             case ':':
                 gameWon = true;
-                System.out.println("Congratulations! You've reached the goal!");
                 break;
 
             case '*':
                 player.setHP(player.getHP() - 1);
-                System.out.println("Ouch. HP : " + player.getHP());
                 break;
         }
     }
@@ -228,36 +241,38 @@ public class VisualizedMap {
 
     public String toString(){
         synchronized(mapLock){
-            StringBuilder str = new StringBuilder();
+            mapBuffer.setLength(0); // Clear buffer
             for(int row = 0; row < map.length; row++){
                 for(int col = 0; col < map[0].length; col++){
                     char c = map[row][col];
 
                     if(Character.isDigit(c)){
-                        str.append("\033[1;35m|\033[0m ");  // Magenta portal symbol
+                        int colorNd = c - '0'; // parsing char to int with offset of 1 from 0
+                        int colorCode = DISTINCT_PORTAL_COLORS[colorNd]; 
+                        mapBuffer.append("\033[38;5;" + colorCode + "m|\033[0m ");
                     }else{
                         switch(c){
                         case 'x':
-                            if(prev == '*') str.append("\033[1;37m" + c + "\033[0m ");
-                            else str.append("\033[1;36m" + c + "\033[0m ");
+                            if(prev == '*') mapBuffer.append("\033[1;37m" + c + "\033[0m ");
+                            else mapBuffer.append("\033[1;36m" + c + "\033[0m ");
                             break;
                         case '#':
-                            str.append("\033[31m" + c + "\033[0m ");
+                            mapBuffer.append("\033[38;5;255m" + c + "\033[0m ");
                             break;
                         case ':':
-                            str.append("\033[1;32m" + c + "\033[0m ");
+                            mapBuffer.append("\033[38;5;46m" + c + "\033[0m ");
                             break;
                         case '*':
-                            str.append("\033[1;31m" + c + "\033[0m ");
+                            mapBuffer.append("\033[1;31m" + c + "\033[0m ");
                             break;
                         default:
-                            str.append("+ ");
+                            mapBuffer.append("\033[38;5;234m+ \033[0m");
                         }
                     }
                 }
-                if(row < map.length - 1) str.append("\n");
+                if(row < map.length - 1) mapBuffer.append("\n");
             }
-            return str.toString();
+            return mapBuffer.toString();
         }
     }
 }
