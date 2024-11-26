@@ -38,9 +38,9 @@ public class VisualizedMap {
     public boolean ctrlPressed = false;
     private StringBuilder mapBuffer = new StringBuilder();
 
-    private int viewportX = 0, viewportY = 0;
-    public final int VIEWPORT_WIDTH = 40;
-    public final int VIEWPORT_HEIGHT = 20;
+    public static int viewportX = 0, viewportY = 0;
+    public int VIEWPORT_WIDTH = 40;
+    public int VIEWPORT_HEIGHT = 20;
 
     private static final int[] DISTINCT_PORTAL_COLORS = {
         226,  // Bright Yellow
@@ -52,9 +52,12 @@ public class VisualizedMap {
         214,  // Orange
         147,  // Medium Purple
     };
-
+    
     // Constructor initializing a map by reading from a file
-    public VisualizedMap(String path){
+    public VisualizedMap(String path, int vWidth, int vHeight){
+        this.VIEWPORT_WIDTH = vWidth;
+        this.VIEWPORT_HEIGHT = vHeight;
+
         player = new Player();
         pairedPortals = new HashMap<>();
         HashMap<Character, Portal> pendingPortals = new HashMap<>();

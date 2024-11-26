@@ -7,487 +7,615 @@ public class MapGenerator {
     private static final char WALL = '#';
     private static final char EMPTY = '+';
     private static final char SPIKE = '*';
-    private static final char PORTAL = '|';
     private static final char GOAL = ':';
     private static final char PLAYER = 'x';
-
-    static class Chamber {
-        int x, y, width, height;
+    
+    static class Cell {
+        Set<Character> possibilities;
+        char value;
+        boolean collapsed;
         
-        Chamber(int x, int y, int width, int height) {
-            this.x = x;
-            this.y = y;
-            this.width = width;
-            this.height = height;
+        Cell() {
+            // Initialize with all possible values
+            possibilities = new HashSet<>(Arrays.asList(WALL, EMPTY, SPIKE));
+            collapsed = false;
         }
-
-        boolean intersects(Chamber other) {
-            return x < other.x + other.width + 2 && 
-                   x + width + 2 > other.x && 
-                   y < other.y + other.height + 2 && 
-                   y + height + 2 > other.y;
-        }
-
-        int getCenterX() {
-            return x + width/2;
-        }
-
-        int getCenterY() {
-            return y + height/2;
+        
+        int entropy() {
+            return collapsed ? 0 : possibilities.size();
         }
     }
 
-    static class Point {
+    static class Position {
         int x, y;
-        Point(int x, int y) {
+        Position(int x, int y) {
             this.x = x;
             this.y = y;
+        }
+    }
+
+    // Define valid neighbor combinations
+    private static final Map<Character, Map<String, Set<Character>>> VALID_NEIGHBORS = new HashMap<>();
+    
+    static {
+        // Initialize valid neighbors for each tile type
+        Map<String, Set<Character>> wallNeighbors = new HashMap<>();
+        wallNeighbors.put("up", new HashSet<>(Arrays.asList(WALL, EMPTY)));
+        wallNeighbors.put("down", new HashSet<>(Arrays.asList(WALL, EMPTY)));
+        wallNeighbors.put("left", new HashSet<>(Arrays.asList(WALL, EMPTY)));
+        wallNeighbors.put("right", new HashSet<>(Arrays.asList(WALL, EMPTY)));
+        VALID_NEIGHBORS.put(WALL, wallNeighbors);
+
+        Map<String, Set<Character>> emptyNeighbors = new HashMap<>();
+        emptyNeighbors.put("up", new HashSet<>(Arrays.asList(WALL, EMPTY, SPIKE)));
+        emptyNeighbors.put("down", new HashSet<>(Arrays.asList(WALL, EMPTY, SPIKE)));
+        emptyNeighbors.put("left", new HashSet<>(Arrays.asList(WALL, EMPTY, SPIKE)));
+        emptyNeighbors.put("right", new HashSet<>(Arrays.asList(WALL, EMPTY, SPIKE)));
+        VALID_NEIGHBORS.put(EMPTY, emptyNeighbors);
+
+        Map<String, Set<Character>> spikeNeighbors = new HashMap<>();
+        spikeNeighbors.put("up", new HashSet<>(Arrays.asList(EMPTY, SPIKE)));
+        spikeNeighbors.put("down", new HashSet<>(Arrays.asList(EMPTY, SPIKE)));
+        spikeNeighbors.put("left", new HashSet<>(Arrays.asList(EMPTY, SPIKE)));
+        spikeNeighbors.put("right", new HashSet<>(Arrays.asList(EMPTY, SPIKE)));
+        VALID_NEIGHBORS.put(SPIKE, spikeNeighbors);
+    }
+
+    private static void collapse(Cell[][] grid, int x, int y, char value) {
+        Cell cell = grid[y][x];
+        cell.possibilities.clear();
+        cell.possibilities.add(value);
+        cell.value = value;
+        cell.collapsed = true;
+    }
+
+    private static void propagateConstraints(Cell[][] grid, Position pos) {
+        Queue<Position> queue = new LinkedList<>();
+        queue.add(pos);
+        
+        while (!queue.isEmpty()) {
+            Position current = queue.poll();
+            Cell currentCell = grid[current.y][current.x];
+            
+            // Check all neighbors
+            int[][] directions = {{0,1}, {1,0}, {0,-1}, {-1,0}};
+            String[] dirNames = {"down", "right", "up", "left"};
+            
+            for (int i = 0; i < directions.length; i++) {
+                int nx = current.x + directions[i][0];
+                int ny = current.y + directions[i][1];
+                
+                if (nx >= 0 && nx < grid[0].length && ny >= 0 && ny < grid.length) {
+                    Cell neighbor = grid[ny][nx];
+                    int originalSize = neighbor.possibilities.size();
+                    
+                    // Update neighbor's possibilities based on current cell's value
+                    if (currentCell.collapsed) {
+                        Set<Character> validNeighbors = VALID_NEIGHBORS.get(currentCell.value)
+                                                                     .get(dirNames[i]);
+                        neighbor.possibilities.retainAll(validNeighbors);
+                        
+                        // If possibilities changed, add to queue
+                        if (!neighbor.collapsed && neighbor.possibilities.size() != originalSize) {
+                            queue.add(new Position(nx, ny));
+                            
+                            // If only one possibility remains, collapse it
+                            if (neighbor.possibilities.size() == 1) {
+                                collapse(grid, nx, ny, neighbor.possibilities.iterator().next());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static Position findMinEntropyPosition(Cell[][] grid, Random rand) {
+        List<Position> minPositions = new ArrayList<>();
+        int minEntropy = Integer.MAX_VALUE;
+        
+        for (int y = 0; y < grid.length; y++) {
+            for (int x = 0; x < grid[0].length; x++) {
+                Cell cell = grid[y][x];
+                if (!cell.collapsed) {
+                    int entropy = cell.entropy();
+                    if (entropy > 0) {
+                        if (entropy < minEntropy) {
+                            minEntropy = entropy;
+                            minPositions.clear();
+                            minPositions.add(new Position(x, y));
+                        } else if (entropy == minEntropy) {
+                            minPositions.add(new Position(x, y));
+                        }
+                    }
+                }
+            }
+        }
+        
+        return minPositions.isEmpty() ? null : minPositions.get(rand.nextInt(minPositions.size()));
+    }
+
+    private static boolean isFullyCollapsed(Cell[][] grid) {
+        for (Cell[] row : grid) {
+            for (Cell cell : row) {
+                if (!cell.collapsed) return false;
+            }
+        }
+        return true;
+    }
+
+    private static void resetGrid(Cell[][] grid) {
+        for (int y = 1; y < grid.length - 1; y++) {
+            for (int x = 1; x < grid[0].length - 1; x++) {
+                grid[y][x] = new Cell();
+            }
+        }
+    }
+
+    private static void placePlayerAndGoal(char[][] map) {
+        List<Position> openSpaces = findOpenSpaces(map);
+        if (openSpaces.isEmpty()) return;
+
+        // Find a position with good clearance for player
+        Position playerPos = null;
+        int bestClearance = 0;
+        
+        for (Position pos : openSpaces) {
+            int clearance = calculateClearance(map, pos);
+            if (clearance > bestClearance) {
+                bestClearance = clearance;
+                playerPos = pos;
+            }
+        }
+
+        if (playerPos == null) return;
+        map[playerPos.y][playerPos.x] = PLAYER;
+        openSpaces.remove(playerPos);
+
+        // Find furthest position with good path for goal
+        Position goalPos = null;
+        int maxPathDistance = 0;
+
+        for (Position pos : openSpaces) {
+            if (calculateClearance(map, pos) >= 2) {  // Ensure some clearance for goal
+                int distance = calculatePathDistance(map, playerPos, pos);
+                if (distance > maxPathDistance) {
+                    maxPathDistance = distance;
+                    goalPos = pos;
+                }
+            }
+        }
+
+        if (goalPos != null) {
+            map[goalPos.y][goalPos.x] = GOAL;
+            clearObstructivePaths(map, playerPos, goalPos);
+        }
+    }
+
+    private static int calculateClearance(char[][] map, Position pos) {
+        int clearance = 0;
+        for (int dy = -2; dy <= 2; dy++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                int ny = pos.y + dy;
+                int nx = pos.x + dx;
+                if (ny >= 0 && ny < map.length && nx >= 0 && nx < map[0].length) {
+                    if (map[ny][nx] == EMPTY) clearance++;
+                }
+            }
+        }
+        return clearance;
+    }
+
+    private static void clearObstructivePaths(char[][] map, Position start, Position end) {
+        // Create a distance map using BFS
+        int[][] distances = new int[map.length][map[0].length];
+        for (int[] row : distances) Arrays.fill(row, Integer.MAX_VALUE);
+        
+        Queue<Position> queue = new LinkedList<>();
+        queue.add(start);
+        distances[start.y][start.x] = 0;
+        
+        int[][] dirs = {{0,1}, {1,0}, {0,-1}, {-1,0}};
+        boolean[][] visited = new boolean[map.length][map[0].length];
+        
+        // Find all reachable positions
+        while (!queue.isEmpty()) {
+            Position current = queue.poll();
+            if (visited[current.y][current.x]) continue;
+            visited[current.y][current.x] = true;
+            
+            for (int[] dir : dirs) {
+                int nx = current.x + dir[0];
+                int ny = current.y + dir[1];
+                
+                if (nx >= 0 && nx < map[0].length && ny >= 0 && ny < map.length) {
+                    if (map[ny][nx] != WALL && !visited[ny][nx]) {
+                        distances[ny][nx] = distances[current.y][current.x] + 1;
+                        queue.add(new Position(nx, ny));
+                    }
+                }
+            }
+        }
+        
+        // If end is not reachable or path is too convoluted, clear some walls
+        if (distances[end.y][end.x] == Integer.MAX_VALUE || 
+            distances[end.y][end.x] > Math.abs(end.x - start.x) + Math.abs(end.y - start.y) * 2) {
+            
+            // Clear path using A* pathfinding
+            clearDirectPath(map, start, end);
+        }
+        
+        // Clear random obstructive walls near the path
+        clearNearbyObstructions(map, start, end);
+    }
+
+    private static void clearDirectPath(char[][] map, Position start, Position end) {
+        int dx = Integer.compare(end.x - start.x, 0);
+        int dy = Integer.compare(end.y - start.y, 0);
+        
+        int x = start.x;
+        int y = start.y;
+        
+        while (x != end.x || y != end.y) {
+            // Clear walls in a 2-tile radius
+            for (int cy = -1; cy <= 1; cy++) {
+                for (int cx = -1; cx <= 1; cx++) {
+                    int nx = x + cx;
+                    int ny = y + cy;
+                    if (nx >= 0 && nx < map[0].length && ny >= 0 && ny < map.length) {
+                        if (map[ny][nx] == WALL) {
+                            map[ny][nx] = EMPTY;
+                        }
+                    }
+                }
+            }
+            
+            // Move towards goal
+            if (Math.abs(end.x - x) > Math.abs(end.y - y)) {
+                x += dx;
+            } else {
+                y += dy;
+            }
+        }
+    }
+
+    private static void clearNearbyObstructions(char[][] map, Position start, Position end) {
+        Random rand = new Random();
+        int clearRadius = 3;
+        
+        // Get points along the approximate path
+        List<Position> pathPoints = new ArrayList<>();
+        int steps = Math.max(Math.abs(end.x - start.x), Math.abs(end.y - start.y));
+        
+        for (int i = 0; i <= steps; i++) {
+            int x = start.x + (end.x - start.x) * i / steps;
+            int y = start.y + (end.y - start.y) * i / steps;
+            pathPoints.add(new Position(x, y));
+        }
+        
+        // Clear obstructions near path points
+        for (Position point : pathPoints) {
+            for (int dy = -clearRadius; dy <= clearRadius; dy++) {
+                for (int dx = -clearRadius; dx <= clearRadius; dx++) {
+                    int nx = point.x + dx;
+                    int ny = point.y + dy;
+                    
+                    if (nx >= 1 && nx < map[0].length - 1 && 
+                        ny >= 1 && ny < map.length - 1) {
+                        if (map[ny][nx] == WALL && rand.nextDouble() < 0.4) {
+                            map[ny][nx] = EMPTY;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static List<Position> findOpenSpaces(char[][] map) {
+        List<Position> spaces = new ArrayList<>();
+        for (int y = 1; y < map.length - 1; y++) {
+            for (int x = 1; x < map[0].length - 1; x++) {
+                if (map[y][x] == EMPTY && calculateClearance(map, new Position(x, y)) >= 5) {
+                    spaces.add(new Position(x, y));
+                }
+            }
+        }
+        return spaces;
+    }
+
+    private static int calculatePathDistance(char[][] map, Position start, Position end) {
+        Queue<Position> queue = new LinkedList<>();
+        boolean[][] visited = new boolean[map.length][map[0].length];
+        int[][] distance = new int[map.length][map[0].length];
+        
+        queue.add(start);
+        visited[start.y][start.x] = true;
+        
+        int[][] dirs = {{0,1}, {1,0}, {0,-1}, {-1,0}};
+        
+        while (!queue.isEmpty()) {
+            Position current = queue.poll();
+            
+            if (current.x == end.x && current.y == end.y) {
+                return distance[current.y][current.x];
+            }
+            
+            for (int[] dir : dirs) {
+                int nx = current.x + dir[0];
+                int ny = current.y + dir[1];
+                
+                if (nx >= 0 && nx < map[0].length && ny >= 0 && ny < map.length &&
+                    !visited[ny][nx] && (map[ny][nx] == EMPTY || map[ny][nx] == GOAL)) {
+                    visited[ny][nx] = true;
+                    distance[ny][nx] = distance[current.y][current.x] + 1;
+                    queue.add(new Position(nx, ny));
+                }
+            }
+        }
+        
+        return Integer.MAX_VALUE;
+    }
+
+    private static void addPortals(char[][] map) {
+        Random rand = new Random();
+        List<Position> validPositions = new ArrayList<>();
+        
+        // Find valid portal locations
+        for (int y = 1; y < map.length - 1; y++) {
+            for (int x = 1; x < map[0].length - 1; x++) {
+                if (map[y][x] == EMPTY && hasEmptyNeighbors(map, x, y)) {
+                    validPositions.add(new Position(x, y));
+                }
+            }
+        }
+
+        // Place portal pairs
+        int numPairs = Math.min(4, validPositions.size() / 2);
+        for (int i = 0; i < numPairs && validPositions.size() >= 2; i++) {
+            // Place first portal
+            int idx1 = rand.nextInt(validPositions.size());
+            Position pos1 = validPositions.remove(idx1);
+            
+            // Find distant position for second portal
+            int maxDist = 0;
+            int bestIdx = -1;
+            
+            for (int j = 0; j < validPositions.size(); j++) {
+                Position pos2 = validPositions.get(j);
+                int dist = Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
+                if (dist > maxDist) {
+                    maxDist = dist;
+                    bestIdx = j;
+                }
+            }
+            
+            if (bestIdx != -1) {
+                Position pos2 = validPositions.remove(bestIdx);
+                map[pos1.y][pos1.x] = Character.forDigit(i, 10);
+                map[pos2.y][pos2.x] = Character.forDigit(i, 10);
+            }
+        }
+    }
+
+    private static boolean hasEmptyNeighbors(char[][] map, int x, int y) {
+        int emptyCount = 0;
+        int[][] directions = {{0,1}, {1,0}, {0,-1}, {-1,0}};
+        
+        for (int[] dir : directions) {
+            int nx = x + dir[0];
+            int ny = y + dir[1];
+            if (map[ny][nx] == EMPTY) emptyCount++;
+        }
+        
+        return emptyCount >= 2;
+    }
+
+    public static String generateMap(int width, int height) {
+        StringBuilder mapContent = new StringBuilder();
+        mapContent.append("Standard " + height + "x" + width + " map with obstacles.\n");
+        mapContent.append(height + "\n");
+        mapContent.append(width + "\n");
+
+        Cell[][] grid = new Cell[height][width];
+        Random rand = new Random();
+        
+        // Initialize grid
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                grid[y][x] = new Cell();
+            }
+        }
+
+        // Force borders to be walls
+        for (int x = 0; x < width; x++) {
+            collapse(grid, x, 0, WALL);
+            collapse(grid, x, height-1, WALL);
+        }
+        for (int y = 0; y < height; y++) {
+            collapse(grid, 0, y, WALL);
+            collapse(grid, width-1, y, WALL);
+        }
+
+        // Run wave function collapse
+        while (!isFullyCollapsed(grid)) {
+            Position minEntropyPos = findMinEntropyPosition(grid, rand);
+            if (minEntropyPos == null) break;
+            
+            Cell cell = grid[minEntropyPos.y][minEntropyPos.x];
+            if (cell.possibilities.isEmpty()) {
+                // Backtrack or restart if necessary
+                resetGrid(grid);
+                continue;
+            }
+            
+            // Randomly choose from possible values
+            List<Character> possible = new ArrayList<>(cell.possibilities);
+            char chosenValue = possible.get(rand.nextInt(possible.size()));
+            collapse(grid, minEntropyPos.x, minEntropyPos.y, chosenValue);
+            
+            // Propagate constraints
+            propagateConstraints(grid, minEntropyPos);
+        }
+
+        // Convert to final map
+        char[][] map = new char[height][width];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                map[y][x] = grid[y][x].value;
+            }
+        }
+
+        // Place player and goal
+        placePlayerAndGoal(map);
+        
+        // Add portals
+        addPortals(map);
+
+        // Convert to string
+        for (char[] row : map) {
+            mapContent.append(row).append('\n');
+        }
+        
+        // Clear spike groups
+        clearSpikes(mapContent);
+        return mapContent.toString();
+    }
+
+    private static void clearSpikes(StringBuilder mapContent) {
+        // Convert StringBuilder to lines
+        String[] lines = mapContent.toString().split("\n");
+        
+        // First line is description, next two lines are height and width
+        String description = lines[0];
+        int height = Integer.parseInt(lines[1]);
+        int width = Integer.parseInt(lines[2]);
+        
+        // Create map from subsequent lines
+        char[][] map = new char[height][width];
+        for (int y = 0; y < height; y++) {
+            map[y] = lines[y + 3].toCharArray();
+        }
+        
+        // Spike reduction parameters
+        int MAX_CLUSTER_SIZE = 0;  // Maximum allowed spikes in a cluster
+        double SPIKE_REDUCTION_PROBABILITY = 1.0; // Probability of removing excess spikes
+        
+        // Identify and process spike clusters
+        for (int y = 1; y < height - 1; y++) {
+            for (int x = 1; x < width - 1; x++) {
+                if (map[y][x] == '*') {
+                    // Check surrounding area for spike clusters
+                    int[][] directions = {{-1,0}, {1,0}, {0,-1}, {0,1}, {-1,-1}, {-1,1}, {1,-1}, {1,1}};
+                    List<Position> spikeCluster = new ArrayList<>();
+                    spikeCluster.add(new Position(x, y));
+                    
+                    // Find adjacent spikes
+                    for (int[] dir : directions) {
+                        int nx = x + dir[0];
+                        int ny = y + dir[1];
+                        if (nx >= 0 && nx < width && ny >= 0 && ny < height && map[ny][nx] == '*') {
+                            spikeCluster.add(new Position(nx, ny));
+                        }
+                    }
+                    
+                    // Reduce spike clusters that are too large
+                    if (spikeCluster.size() > MAX_CLUSTER_SIZE) {
+                        Random rand = new Random();
+                        Collections.shuffle(spikeCluster);
+                        
+                        // Remove spikes beyond MAX_CLUSTER_SIZE probabilistically
+                        for (int i = MAX_CLUSTER_SIZE; i < spikeCluster.size(); i++) {
+                            if (rand.nextDouble() < SPIKE_REDUCTION_PROBABILITY) {
+                                Position spike = spikeCluster.get(i);
+                                map[spike.y][spike.x] = '+';  // Replace with empty space
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Rebuild mapContent with modified map
+        mapContent.setLength(0);  // Clear existing content
+        mapContent.append(description).append("\n");
+        mapContent.append(height).append("\n");
+        mapContent.append(width).append("\n");
+        
+        for (char[] row : map) {
+            mapContent.append(row).append('\n');
         }
     }
 
     private static String getMapDirectory() {
-        File srcMaps = new File("maps");
-        if (srcMaps.exists()) {
-            return "../maps";
+        // Get the current working directory
+        String currentDir = System.getProperty("user.dir");
+        
+        // Go up one level if we're in src directory
+        if (currentDir.endsWith("src")) {
+            currentDir = new File(currentDir).getParent();
         }
         
-        File maps = new File("maps");
-        if (!maps.exists()) {
-            maps.mkdir();
+        // Create maps directory in project root
+        File mapsDir = new File(currentDir + File.separator + "maps");
+        if (!mapsDir.exists()) {
+            mapsDir.mkdir();
         }
-        return "maps/";
+        return mapsDir.getAbsolutePath();
     }
 
-    private static int getNextMapNumber() {
+    public static void saveNewMap(String mapContent) {
         String mapDir = getMapDirectory();
         File directory = new File(mapDir);
         
-        File[] files = directory.listFiles((dir, name) -> 
-            name.matches("map\\d+\\.txt"));
-        
-        if (files == null || files.length == 0) {
-            return 1;
-        }
-
-        int maxNumber = 0;
-        for (File file : files) {
-            String fileName = file.getName();
-            try {
-                int number = Integer.parseInt(
-                    fileName.substring(3, fileName.length() - 4));
-                maxNumber = Math.max(maxNumber, number);
-            } catch (NumberFormatException e) {
-                continue;
+        int nextNumber = 1;
+        File[] files = directory.listFiles((dir, name) -> name.matches("map\\d+\\.txt"));
+        if (files != null && files.length > 0) {
+            for (File file : files) {
+                try {
+                    int num = Integer.parseInt(file.getName().substring(3, file.getName().length() - 4));
+                    nextNumber = Math.max(nextNumber, num + 1);
+                } catch (NumberFormatException e) {
+                    continue;
+                }
             }
         }
 
-        return maxNumber + 1;
-    }
-
-    public void saveNewMap(String mapContent) {
-        int nextNumber = getNextMapNumber();
-        String mapName = "map" + nextNumber;
-        String mapDir = getMapDirectory();
-        String filePath = mapName + ".txt";
-        
         try {
-            File file = new File(mapDir, filePath);
+            File file = new File(directory, "map" + nextNumber + ".txt");
             FileWriter writer = new FileWriter(file);
             writer.write(mapContent);
             writer.close();
-            
             System.out.println("Map saved as: " + file.getName());
         } catch (IOException e) {
             System.err.println("Error saving map: " + e.getMessage());
         }
     }
 
-    private static List<Chamber> createConnectedChambers(char[][] map, int width, int height) {
-        List<Chamber> chambers = new ArrayList<>();
-        
-        // Guaranteed minimum sizes to prevent too-small chambers
-        int minChamberWidth = 6;
-        int minChamberHeight = 4;
-        
-        // Calculate number of chambers that can fit
-        int gridColumns = Math.min(3, (width - 8) / (minChamberWidth + 4));
-        int gridRows = Math.min(2, (height - 8) / (minChamberHeight + 4));
-        
-        if (gridColumns < 1) gridColumns = 1;
-        if (gridRows < 1) gridRows = 1;
-        
-        // Calculate chamber sizes
-        int chamberWidth = Math.max(minChamberWidth, (width - (gridColumns + 1) * 4) / gridColumns);
-        int chamberHeight = Math.max(minChamberHeight, (height - (gridRows + 1) * 4) / gridRows);
-        
-        // Calculate starting positions to center the grid
-        int totalChamberWidth = gridColumns * chamberWidth + (gridColumns - 1) * 4;
-        int totalChamberHeight = gridRows * chamberHeight + (gridRows - 1) * 4;
-        int startX = (width - totalChamberWidth) / 2;
-        int startY = (height - totalChamberHeight) / 2;
-        
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridColumns; col++) {
-                int x = startX + col * (chamberWidth + 4);
-                int y = startY + row * (chamberHeight + 4);
-                
-                // Ensure chamber doesn't exceed map bounds
-                if (x + chamberWidth >= width - 1 || y + chamberHeight >= height - 1) {
-                    continue;
-                }
-                
-                Chamber chamber = new Chamber(x, y, chamberWidth, chamberHeight);
-                chambers.add(chamber);
-                
-                // Create chamber walls
-                for (int i = y; i < y + chamberHeight; i++) {
-                    for (int j = x; j < x + chamberWidth; j++) {
-                        if (i == y || i == y + chamberHeight - 1 ||
-                            j == x || j == x + chamberWidth - 1) {
-                            map[i][j] = WALL;
-                        }
-                    }
-                }
-                
-                // Create doors between chambers
-                if (col > 0) {
-                    createDoor(map, x, y + chamberHeight/2);
-                }
-                if (row > 0) {
-                    createDoor(map, x + chamberWidth/2, y);
-                }
-            }
-        }
-        
-        // Don't return empty chamber list
-        if (chambers.isEmpty()) {
-            Chamber singleChamber = new Chamber(2, 2, Math.min(width-4, minChamberWidth), 
-                                              Math.min(height-4, minChamberHeight));
-            chambers.add(singleChamber);
-            
-            // Create walls for single chamber
-            for (int i = singleChamber.y; i < singleChamber.y + singleChamber.height; i++) {
-                for (int j = singleChamber.x; j < singleChamber.x + singleChamber.width; j++) {
-                    if (i == singleChamber.y || i == singleChamber.y + singleChamber.height - 1 ||
-                        j == singleChamber.x || j == singleChamber.x + singleChamber.width - 1) {
-                        map[i][j] = WALL;
-                    }
-                }
-            }
-        }
-        
-        return chambers;
-    }
-
-    // Update generateLargeMap to include size validation and retry limits
-    public static String generateLargeMap(int width, int height) {
-        StringBuilder mapContent = new StringBuilder();
-        try {
-            // Ensure minimum size
-            width = Math.max(10, width);
-            height = Math.max(8, height);
-            
-            mapContent.append("Standard " + height + "x" + width + " map with obstacles.\n");
-            mapContent.append(height + "\n");
-            mapContent.append(width + "\n");
-
-            char[][] map;
-            List<Chamber> chambers;
-            Point goalLocation;
-            Point playerStart;
-            
-            int attempts = 0;
-            int maxAttempts = 5;
-            
-            do {
-                attempts++;
-                map = new char[height][width];
-                for (int i = 0; i < height; i++) {
-                    Arrays.fill(map[i], EMPTY);
-                }
-                
-                addBorders(map);
-                chambers = createConnectedChambers(map, width, height);
-                
-                if (chambers.isEmpty()) {
-                    continue;
-                }
-                
-                playerStart = new Point(chambers.get(0).x + 2, chambers.get(0).y + 2);
-                goalLocation = createGoalPosition(map, chambers);
-                
-                // Only add portals if we have multiple chambers
-                if (chambers.size() > 1) {
-                    addPortalNetwork(map, chambers);
-                }
-                
-                addHazardPatterns(map, chambers, goalLocation);
-                
-                map[playerStart.y][playerStart.x] = PLAYER;
-                map[goalLocation.y][goalLocation.x] = GOAL;
-                
-                if (validateMap(map, playerStart, goalLocation)) {
-                    break;
-                }
-                
-                if (attempts >= maxAttempts) {
-                    // If we can't generate a valid map, create a simple one
-                    System.out.print("Failed.");
-                    createSimpleMap(map, width, height);
-                    break;
-                }
-                
-            } while (true);
-
-            for (char[] row : map) {
-                mapContent.append(row).append('\n');
-            }
-            
-            return mapContent.toString();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    private static void createSimpleMap(char[][] map, int width, int height) {
-        // Clear the map
-        for (int i = 0; i < height; i++) {
-            Arrays.fill(map[i], EMPTY);
-        }
-        
-        // Add borders
-        addBorders(map);
-        
-        // Place player at start
-        map[2][2] = PLAYER;
-        
-        // Place goal near the opposite corner
-        map[height-3][width-3] = GOAL;
-        
-        // Add some basic obstacles
-        for (int i = 4; i < height-4; i += 2) {
-            for (int j = 4; j < width-4; j += 3) {
-                if (map[i][j] == EMPTY) {
-                    map[i][j] = WALL;
-                }
-            }
-        }
-    }
-
-    private static void addBorders(char[][] map) {
-        Arrays.fill(map[0], WALL);
-        Arrays.fill(map[map.length - 1], WALL);
-        for (int i = 0; i < map.length; i++) {
-            map[i][0] = WALL;
-            map[i][map[0].length - 1] = WALL;
-        }
-    }
-
-    private static void createDoor(char[][] map, int x, int y) {
-        map[y][x] = EMPTY;
-        map[y][x-1] = EMPTY;
-    }
-
-    private static Point createGoalPosition(char[][] map, List<Chamber> chambers) {
-        Chamber goalChamber = chambers.get(chambers.size() - 1);
-        int goalX = goalChamber.x + goalChamber.width - 3;
-        int goalY = goalChamber.y + goalChamber.height - 3;
-        
-        createGoalMaze(map, goalX, goalY, goalChamber);
-        return new Point(goalX, goalY);
-    }
-
-    private static void createGoalMaze(char[][] map, int goalX, int goalY, Chamber chamber) {
-        int[][] pattern = {
-            {1,1,1,1,1},
-            {1,0,1,0,1},
-            {1,0,0,0,1},
-            {1,0,1,0,1},
-            {1,1,1,1,1}
-        };
-        
-        int startX = goalX - 2;
-        int startY = goalY - 2;
-        
-        for (int y = 0; y < pattern.length; y++) {
-            for (int x = 0; x < pattern[0].length; x++) {
-                int mapX = startX + x;
-                int mapY = startY + y;
-                
-                if (mapX >= chamber.x && mapX < chamber.x + chamber.width &&
-                    mapY >= chamber.y && mapY < chamber.y + chamber.height) {
-                    if (pattern[y][x] == 1) {
-                        map[mapY][mapX] = WALL;
-                    } else if ((x + y) % 2 == 0 && (x != 2 || y != 2)) {
-                        map[mapY][mapX] = SPIKE;
-                    }
-                }
-            }
-        }
-        
-        // Create one guaranteed path
-        int pathX = startX + 2;
-        int pathY = startY + pattern.length - 1;
-        for (int y = pathY; y > startY + 2; y--) {
-            map[y][pathX] = EMPTY;
-        }
-    }
-
-    private static void addPortalNetwork(char[][] map, List<Chamber> chambers) {
-        for (int i = 0; i < chambers.size() - 1; i++) {
-            Chamber source = chambers.get(i);
-            Chamber target = chambers.get(i + 1);
-            
-            Point p1 = findSafePortalLocation(map, source);
-            Point p2 = findSafePortalLocation(map, target);
-            
-            if (p1 != null && p2 != null) {
-                map[p1.y][p1.x] = Character.forDigit(i, 10);
-                map[p2.y][p2.x] = Character.forDigit(i, 10);
-            }
-        }
-    }
-
-    private static Point findSafePortalLocation(char[][] map, Chamber chamber) {
-        for (int y = chamber.y + 2; y < chamber.y + chamber.height - 2; y++) {
-            for (int x = chamber.x + 2; x < chamber.x + chamber.width - 2; x++) {
-                if (map[y][x] == EMPTY && isSafePortalSpot(map, x, y)) {
-                    return new Point(x, y);
-                }
-            }
-        }
-        return null;
-    }
-
-    private static boolean isSafePortalSpot(char[][] map, int x, int y) {
-        for (int dy = -1; dy <= 1; dy++) {
-            for (int dx = -1; dx <= 1; dx++) {
-                if (map[y + dy][x + dx] != EMPTY && map[y + dy][x + dx] != WALL) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private static void addHazardPatterns(char[][] map, List<Chamber> chambers, Point goalLocation) {
-        for (Chamber chamber : chambers) {
-            boolean isOnPathToCrypticGoal = isOnCrypticPath(chamber, goalLocation);
-            
-            if (isOnPathToCrypticGoal) {
-                addGuidingHazards(map, chamber);
-            } else {
-                addMisleadingHazards(map, chamber);
-            }
-        }
-    }
-
-    private static boolean isOnCrypticPath(Chamber chamber, Point goalLocation) {
-        int distance = Math.abs(chamber.getCenterX() - goalLocation.x) + 
-                      Math.abs(chamber.getCenterY() - goalLocation.y);
-        return distance < 20;
-    }
-
-    private static void addGuidingHazards(char[][] map, Chamber chamber) {
-        for (int y = chamber.y + 1; y < chamber.y + chamber.height - 1; y++) {
-            for (int x = chamber.x + 1; x < chamber.x + chamber.width - 1; x++) {
-                if (map[y][x] == EMPTY && ((x - chamber.x) + (y - chamber.y)) % 3 == 0) {
-                    map[y][x] = SPIKE;
-                }
-            }
-        }
-    }
-
-    private static void addMisleadingHazards(char[][] map, Chamber chamber) {
-        for (int y = chamber.y + 1; y < chamber.y + chamber.height - 1; y++) {
-            for (int x = chamber.x + 1; x < chamber.x + chamber.width - 1; x++) {
-                if (map[y][x] == EMPTY && (x * y) % 4 == 0) {
-                    map[y][x] = SPIKE;
-                }
-            }
-        }
-    }
-
-    private static boolean validateMap(char[][] map, Point start, Point goal) {
-        char[][] mapCopy = new char[map.length][map[0].length];
-        for (int i = 0; i < map.length; i++) {
-            mapCopy[i] = map[i].clone();
-        }
-        
-        Map<Character, List<Point>> portals = new HashMap<>();
-        for (int y = 0; y < map.length; y++) {
-            for (int x = 0; x < map[0].length; x++) {
-                char c = map[y][x];
-                if (Character.isDigit(c)) {
-                    portals.computeIfAbsent(c, k -> new ArrayList<>())
-                           .add(new Point(x, y));
-                }
-            }
-        }
-        
-        for (List<Point> portalPair : portals.values()) {
-            if (portalPair.size() != 2) {
-                return false;
-            }
-        }
-        
-        return isReachable(mapCopy, start, goal, portals);
-    }
-
-    private static boolean isReachable(char[][] map, Point start, Point goal, Map<Character, List<Point>> portals) {
-        Queue<Point> queue = new LinkedList<>();
-        queue.add(start);
-        map[start.y][start.x] = 'V';
-        
-        while (!queue.isEmpty()) {
-            Point p = queue.poll();
-            
-            if (p.x == goal.x && p.y == goal.y) {
-                return true;
-            }
-            
-            int[][] dirs = {{0,1}, {1,0}, {0,-1}, {-1,0}};
-            for (int[] dir : dirs) {
-                int nx = p.x + dir[0];
-                int ny = p.y + dir[1];
-                
-                if (isValidMove(map, nx, ny)) {
-                    queue.add(new Point(nx, ny));
-                    map[ny][nx] = 'V';
-                }
-            }
-            
-            char tile = map[p.y][p.x];
-            if (Character.isDigit(tile)) {
-                List<Point> pair = portals.get(tile);
-                for (Point portalExit : pair) {
-                    if (portalExit.x != p.x || portalExit.y != p.y) {
-                        if (map[portalExit.y][portalExit.x] != 'V') {
-                            queue.add(portalExit);
-                            map[portalExit.y][portalExit.x] = 'V';
-                        }
-                    }
-                }
-            }
-        }
-        
-        return false;
-    }
-
-    private static boolean isValidMove(char[][] map, int x, int y) {
-        return x >= 0 && x < map[0].length && 
-               y >= 0 && y < map.length && 
-               map[y][x] != WALL && 
-               map[y][x] != 'V';
-    }
-
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         Random rand = new Random();
-        MapGenerator generator = new MapGenerator();
-        String mapContent = generateLargeMap(30 + rand.nextInt(70), 10 + rand.nextInt(40));
-        if (mapContent != null) {
-            generator.saveNewMap(mapContent);
+        
+        // Define dimension bounds
+        final int MIN_WIDTH = 75;
+        final int MAX_WIDTH = 100;
+        final int MIN_HEIGHT = 75;
+        final int MAX_HEIGHT = 100;
+        
+        // Generate multiple maps
+        for (int i = 0; i < 2; i++) {
+            // Generate uniform dimensions
+            int width = MIN_WIDTH + (int)(rand.nextDouble() * (MAX_WIDTH - MIN_WIDTH));
+            int height = MIN_HEIGHT + (int)(rand.nextDouble() * (MAX_HEIGHT - MIN_HEIGHT));
+            
+            // Ensure dimensions are even for better symmetry (optional)
+            width = width - (width % 2);
+            height = height - (height % 2);
+            
+            String mapContent = generateMap(width, height);
+            if (mapContent != null) {
+                saveNewMap(mapContent);  // Call static method directly
+            }
+            
+            System.out.println("Generated map with dimensions: " + width + "x" + height);
         }
     }
 }

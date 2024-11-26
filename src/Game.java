@@ -22,6 +22,7 @@
  */
 
 import java.util.Scanner;
+import java.io.File;
 import java.io.IOException;
 
 // To listen to keyboard presses
@@ -65,6 +66,16 @@ public class Game {
     private long lastMoveTime = 0;
     private static final long MOVE_DELAY = 75; // delay in ms
     
+    // Settings Variables
+    public static int DEFAULT_VIEWPORT_WIDTH = 50;
+    public static int DEFAULT_VIEWPORT_HEIGHT = 20;
+    public static int DEFAULT_FPS = 60;
+
+    // Font Design
+    public static final String RESET = "\033[0m";
+    public static final String BOLD = "\033[1m";
+    public static final String BACKGROUND = "\033[48;5;";
+
     // Empty Constructor
     public Game(){
         this.map = null;
@@ -84,8 +95,10 @@ public class Game {
         frame = new JFrame("Game Window");
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         
-        frame.setSize(50, 50);
-        frame.setLocationRelativeTo(null);
+        frame.setSize(1, 1);
+
+        // Set its location
+        frame.setLocation(0,0);
 
         // Make sure window can be focused
         frame.setFocusable(true);
@@ -135,7 +148,7 @@ public class Game {
     // Initializing the thread
     public void gameLoop(){
         long before = System.currentTimeMillis();
-        final double NS_PER_UPDATE = ONE_BILLION / 60; // 60 updates per second -- nanoseconds per update
+        final double NS_PER_UPDATE = ONE_BILLION / DEFAULT_FPS; // 60 frames per second
         double delta = 0;
 
         // Initial render
@@ -188,7 +201,7 @@ public class Game {
                 }
             }
             try{Thread.sleep(1000);}catch(InterruptedException e){};
-            System.out.print(" You've died.\033[0m\n");
+            System.out.print(" You've died.\n" + RESET);
             try{Thread.sleep(1000);}catch(InterruptedException e){};
 
             System.out.print("Restart? Type 'Help' for more commands.\n");
@@ -197,7 +210,7 @@ public class Game {
 
             System.out.print("\033[32mCongratulations! ");
             try{Thread.sleep(1000);}catch(InterruptedException e){};
-            System.out.print("You've won!\033[0m\n");
+            System.out.print("You've won!\n" + RESET);
             try{Thread.sleep(1000);}catch(InterruptedException e){};
 
             System.out.print("Try our other levels! Type 'Help' for more commands.\n");
@@ -251,11 +264,11 @@ public class Game {
 
         // Build the entire screen in memory first
         screenBuffer.append(CURSOR_HOME) // Move cursor to top instead of clearing screen
-                    .append("HP: ").append(player.getHP() + "\n")
+                    .append(BOLD + "HP: ").append(player.getHP() + RESET + "\n")
                     .append(map.toString());
 
         System.out.print(screenBuffer.toString());
-        System.out.flush(); // flush any buffered input
+        // System.out.flush(); // flush any buffered input
     }
 
     private void play(){
@@ -303,24 +316,24 @@ public class Game {
             System.out.print(map + "\n");
     }
 
-    private static void displayHelp(Scanner helpScanner) {
+    private static void displayHelp(Scanner scan) {
         boolean helpRunning = true;
 
             System.out.println("===============================");
-            System.out.println("\033[1;32mGame Help\033[0m");
-            System.out.println("\033[1;37mCommands:\033[0m");
+            System.out.println("\033[1;32mGame Help" + RESET);
+            System.out.println("\033[1;37mCommands:" + RESET);
             System.out.println("  Play <number>   - Start game with specified map");
             System.out.println("  Preview <number> - Show preview of specified map");
             System.out.println("  Help            - Display this help message");
             System.out.println("  Quit            - Exit the game");
-            System.out.println("\n\033[1;37mGame Controls:\033[0m");
+            System.out.println("\n\033[1;37mGame Controls:" + RESET);
             System.out.println("  W - Move up");
             System.out.println("  A - Move left");
             System.out.println("  S - Move down");
             System.out.println("  D - Move right");
             System.out.println("  CTRL - Hold for portal teleporting");
             System.out.println("  CTRL+Q - Quit game");
-            System.out.println("\n\033[1;37mMap Tiles:\033[0m");
+            System.out.println("\n\033[1;37mMap Tiles:" + RESET);
             System.out.println("  x - Player");
             System.out.println("  + - Empty space");
             System.out.println("  # - Wall");
@@ -328,16 +341,16 @@ public class Game {
             System.out.println("  * - Spike");
             System.out.println("  | - Portal");
             System.out.println();
-            System.out.println("Type -h <map_tile> for additional information.");
+            System.out.println("Type '-h <map_tile>' for additional information.");
             System.out.println("Type 'back' to return to main menu.");
 
         while(helpRunning) {
-            String[] inputs = helpScanner.nextLine().split(" ");
+            String[] inputs = scan.nextLine().split(" ");
             
             switch(inputs[0]) {
                 case "-h":
                     if(inputs.length != 2) {
-                        System.out.println("Usage: -h <map_tile>");
+                        System.out.println("Usage: \033[38;5;196m-h <map_tile>\033[0m");
                         continue;
                     }
                     
@@ -373,15 +386,57 @@ public class Game {
                     System.out.println("Invalid input. Use '-h <map_tile>' for tile information or 'back' to return.");
             }
         }
-     }
+    }
 
-    public static void main(String args[]) throws IOException{
-        Path mapsDir = Paths.get("maps");
-        Path mapPath;
+    public static void displaySettings(Scanner scan){
+        boolean settingsRunning = true;
+        
+        while(settingsRunning){
+            System.out.print(String.format("\n\033[1mCurrent Viewport Dimensions (VIEWPORT):" + RESET + " %dx%d (Recommended to be around 50x20)\n" +"\033[1mCurrent FPS (FIXED):" + RESET + " %d\n",
+                                        DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT, DEFAULT_FPS));
+            System.out.print("Type \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings or \033[38;5;196mback" + RESET + " to return.\n");
+            
+            String[] parsed2 = scan.nextLine().split(" ");
+            try{
+                switch(parsed2[0].toLowerCase()){
+                    case "viewport":
+                        String[] dim = parsed2[1].split("x");
+                        int width = Integer.parseInt(dim[0]);
+                        int height = Integer.parseInt(dim[1]);
+                        if(width > 0 && height > 0){
+                            DEFAULT_VIEWPORT_WIDTH = width;
+                            DEFAULT_VIEWPORT_HEIGHT = height;
+                            System.out.print("Viewport settings succesfully changed!\n");
+                        }else{
+                            System.out.print("Invalid input. Width and height must be greater than 0");
+                        }
+
+                        break;
+                    case "back":
+                        settingsRunning = false;
+                        break;
+                    default:
+                        System.out.println("Invalid input. Use \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings or \033[38;5;196mback" + RESET + " to return.");
+                }
+            }catch(ArrayIndexOutOfBoundsException e){
+                System.out.println("Invalid input. Use \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings or \033[38;5;196mback" + RESET + " to return.");
+            }
+        }
+    }
+
+    public static void main(String args[]) throws IOException, InterruptedException{
+        String currentDir = System.getProperty("user.dir");
+        // Get parent directory
+        if(currentDir.endsWith("src")){
+            currentDir = new File(currentDir).getParent();
+        }
+        File mapsDir = new File(currentDir + File.separator + "maps");
+        String mapPath = mapsDir.getAbsolutePath() + File.separator;
+        File map;
 
         Scanner scan = new Scanner(System.in);
 
-        System.out.println("\033[1;32mWelcome to Slitheria!\033[0m");
+        System.out.println("\033[1;32mWelcome to Slitheria!" + RESET);
 
             System.out.print("\033[1mAbout:\033[0m This is a side-scrolling text-based rogue-like game.\n" + 
                             "       It features slithering your way through the tight abyss of \033[1mSlitheria\033[0m,\n" + 
@@ -391,13 +446,23 @@ public class Game {
             System.out.print("===============================");
             System.out.print("\n\033[1mPlay Map: \033[0mPlay <map_number>\n" +
                             "\033[1mMap Preview: \033[0mPreview <map_number>\n" +
+                            "\033[1mSettings: \033[0mSettings\n" + 
                             "\033[1mHelp Page: \033[0mHelp\n");
+
             String input = scan.nextLine();
             String[] parsed = input.split(" ");
 
             switch(parsed[0].toLowerCase()){
                 case "0" :
-                    Game gamea = new Game(new VisualizedMap("C:\\Users\\bened\\OneDrive\\Documents\\University\\Projects\\Project1-Slitheria\\Slitheria\\maps\\map" + parsed[1] +".txt"));
+                    System.out.print("Generating Map " + parsed[1] + "...\n");
+                        for(int i = 0; i < 100; i++){
+                            Thread.sleep(35);
+                            System.out.print("\033[1000D");
+                            System.out.print(i + "%");
+                        }
+                        
+                        System.out.print("\nComplete!\n");
+                    Game gamea = new Game(new VisualizedMap("C:\\Users\\bened\\OneDrive\\Documents\\University\\Projects\\Project1-Slitheria\\Slitheria\\maps\\map" + parsed[1] +".txt", DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT));
                     gamea.play();
                     break;
                 case "play":
@@ -406,10 +471,25 @@ public class Game {
                         continue;
                     }
 
-                    // Construct path
-                    mapPath = mapsDir.resolve("map" + parsed[1] + ".txt");
-                    if(Files.exists(mapPath)){
-                        Game game = new Game(new VisualizedMap(mapPath.toString()));
+                    map = new File(mapPath + "map" + parsed[1] + ".txt");
+                    if(map.exists() && !map.isDirectory()){
+                        System.out.print("Generating Map " + parsed[1] + "...\n\n");
+                        for(int i = 0; i < 101; i++){
+                            Thread.sleep(35);
+                            int width = (i+1)/4;
+                            System.out.print("\033[1000D"); // move cursor left by 1000
+                            System.out.print(i + "%");
+
+                            String bar = "[" + new String(new char[width]).replace("\0", "\033[48;5;255m \033[0m") + new String(new char[25 - width]).replace("\0", " ") + "]";
+                            System.out.print("\033[1B\033[1000D"); // move cursor down by 1 and left by 1000
+                            System.out.print(bar);
+                            System.out.print("\033[1A");    // move cursor up by 1
+                        }
+                        
+                        System.out.print("\033[3B\n\033[1mComplete!\n\033[0m");
+                        Thread.sleep(100);
+
+                        Game game = new Game(new VisualizedMap(map.getAbsolutePath(), DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT));
                         game.play();
                     }else{
                         System.out.println("Map " + parsed[1] + " not found!");
@@ -422,13 +502,17 @@ public class Game {
                         continue;
                     }
 
-                    mapPath = mapsDir.resolve("map" + parsed[1] + ".txt");
-                    if(Files.exists(mapPath)){
-                        VisualizedMap previewMap = new VisualizedMap(mapPath.toString());
+                    map = new File(mapPath + "map" + parsed[1] + ".txt");
+                    if(map.exists() && !map.isDirectory()){
+                        VisualizedMap previewMap = new VisualizedMap(map.getAbsolutePath(), DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT);
                         System.out.print(previewMap + "\n");
                     }else{
                         System.out.println("Map " + parsed[1] + " not found!");
                     }
+                    break;
+                
+                case "settings":
+                    displaySettings(scan);
                     break;
 
                 case "help":
@@ -442,7 +526,6 @@ public class Game {
 
                 default:
                     System.out.print("Invalid input. Type 'Help' for commands.\n");
-                
             }
         }
     }

@@ -1,3 +1,3 @@
 @echo off
-java -jar TextGame.jar
+java -jar Slitheria.jar
 pause
