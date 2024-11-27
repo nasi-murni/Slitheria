@@ -34,11 +34,6 @@ import java.awt.EventQueue;
 // Provides a focused window
 import javax.swing.JFrame;
 
-// Paths for OS-independent path handling
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.Files;
-
 public class Game {
     // Composition
     public JFrame frame;
@@ -64,12 +59,14 @@ public class Game {
     private final double ONE_BILLION = 1000000000.00;
     private final int MS_TO_NS_SCALAR = 1000000;
     private long lastMoveTime = 0;
-    private static final long MOVE_DELAY = 75; // delay in ms
+    private static final long MOVE_DELAY = 100; // delay in ms
     
     // Settings Variables
     public static int DEFAULT_VIEWPORT_WIDTH = 50;
     public static int DEFAULT_VIEWPORT_HEIGHT = 20;
     public static int DEFAULT_FPS = 60;
+    public static String GAMEMODE = "Normal";
+    public static int STREAK = 0;
 
     // Font Design
     public static final String RESET = "\033[0m";
@@ -161,15 +158,32 @@ public class Game {
             delta += (now - before) * MS_TO_NS_SCALAR / NS_PER_UPDATE;
             before = now;
 
+            if(GAMEMODE.equals("Endless") && map.gameWon){
+                // increaseDifficulty();
+                MG gen = new MG(); // instantiate new MG to create new mapString
+                map = new VisualizedMap(gen.mapString, DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT);
+
+                printVictoryMessage();
+                System.out.print("Streak: " + (++STREAK));
+                System.out.print("Loading next map");
+                try{ 
+                    Thread.sleep(100); System.out.print("."); 
+                    Thread.sleep(100); System.out.print("."); 
+                    Thread.sleep(100); System.out.print("."); 
+                    Thread.sleep(100);
+                }catch(InterruptedException e){};
+            }
+
             if (delta >= 1){
                 updateGame();
             }
             
             render();
 
-            // Check game end conditions
-            if(!running || (ctrlPressed && qPressed) || player.getHP() <= 0 || map.gameWon) {
-                break;  // Exit loop if any end condition is met
+
+            if(shouldEndGame()){
+                handleGameEnd();
+                break;
             }
 
             // Small sleep to prevent CPU overuse
@@ -181,40 +195,63 @@ public class Game {
                 break;
             }
         }
-        
-        System.out.println();
+    }
 
-        frame.dispose();
-        if(ctrlPressed && qPressed){
-
-            System.out.print("Succesfully quitted. Type 'Help' for more commands.\n");
-
-        }else if(player.getHP() <= 0){
-
-            System.out.print("\033[1;31mOh no");
-            for(int i = 0; i < 3; i++){
-                try{
-                    Thread.sleep(1000);
-                    System.out.print(".");
-                }catch(InterruptedException e){
-                    e.printStackTrace();
-                }
-            }
-            try{Thread.sleep(1000);}catch(InterruptedException e){};
-            System.out.print(" You've died.\n" + RESET);
-            try{Thread.sleep(1000);}catch(InterruptedException e){};
-
-            System.out.print("Restart? Type 'Help' for more commands.\n");
-
-        }else if(map.gameWon){
-
-            System.out.print("\033[32mCongratulations! ");
-            try{Thread.sleep(1000);}catch(InterruptedException e){};
-            System.out.print("You've won!\n" + RESET);
-            try{Thread.sleep(1000);}catch(InterruptedException e){};
-
-            System.out.print("Try our other levels! Type 'Help' for more commands.\n");
+    private boolean shouldEndGame(){
+        switch(GAMEMODE){
+            case "Normal":
+                return !running || (ctrlPressed && qPressed) || player.getHP() <= 0 || map.gameWon;
+            case "Endless":
+                return !running || (ctrlPressed && qPressed) || player.getHP() <= 0;
+            default:
+                return !running || (ctrlPressed && qPressed);
         }
+    }
+
+    private void handleGameEnd(){
+        System.out.print("\n");
+        frame.dispose();
+
+        switch(GAMEMODE){
+            case "Normal":
+                if(player.getHP() <= 0){
+                    printDeathMessage();
+                }else{
+                    printVictoryMessage();
+                }
+            case "Endless":
+                if(player.getHP() <= 0){
+                    printDeathMessage();
+                    System.out.print("Streak: " + STREAK + "\n");
+                    if(10 - STREAK >= 3) System.out.print("So close! You only needed to win " + (10 - STREAK) + " more times to get to 10.\n");
+                }
+                break;
+            default:
+                if(ctrlPressed && qPressed)
+                    System.out.print("Succesfully quitted. Type 'Help' for more commands.\n");
+        }
+    }
+
+    private void printDeathMessage(){
+        System.out.print("\033[1;31mOh no");
+        for(int i = 0; i < 3; i++){
+            try{
+                Thread.sleep(1000);
+                System.out.print(".");
+            }catch(InterruptedException e){
+                e.printStackTrace();
+            }
+        }
+        try{Thread.sleep(1000);}catch(InterruptedException e){};
+        System.out.print(" You've died.\n" + RESET);
+        try{Thread.sleep(1000);}catch(InterruptedException e){};
+    }
+
+    private void printVictoryMessage(){
+        System.out.print("\033[32mCongratulations! ");
+        try{Thread.sleep(1000);}catch(InterruptedException e){};
+        System.out.print("You've won!\n" + RESET);
+        try{Thread.sleep(1000);}catch(InterruptedException e){};
     }
 
     /*
@@ -227,30 +264,24 @@ public class Game {
         // that may be modified by the keyboard listener thread
         synchronized (Game.class) {
             long currentTime = System.currentTimeMillis();
-            boolean moved = false;
 
             // Check for movement only after delay
             if (currentTime - lastMoveTime >= MOVE_DELAY) {
-                if (wPressed && map.validToMove(map.icon_x, map.icon_y - 1)) {
-                    map.up();
-                    moved = true;
-                }
-                if (aPressed && map.validToMove(map.icon_x - 1, map.icon_y)) {
-                    map.left();
-                    moved = true;
-                }
-                if (sPressed && map.validToMove(map.icon_x, map.icon_y + 1)) {
-                    map.down();
-                    moved = true;
-                }
-                if (dPressed && map.validToMove(map.icon_x + 1, map.icon_y)) {
-                    map.right();
-                    moved = true;
+                // Handle input and acceleration
+                if(aPressed) player.accelerate(Player.Direction.LEFT);
+                if(dPressed) player.accelerate(Player.Direction.RIGHT);
+                if(wPressed) player.accelerate(Player.Direction.UP);
+                if(sPressed) player.accelerate(Player.Direction.DOWN);
+
+                // Apply deceleration when keys aren't pressed
+                if(!wPressed && !aPressed && !sPressed && !dPressed){
+                    player.decelerate();
                 }
 
-                if (moved) {
-                    lastMoveTime = currentTime;
-                }
+                // Update position based on current velocity
+                map.updatePosition();
+                
+                lastMoveTime = currentTime;
             }
         }
     }
@@ -392,9 +423,15 @@ public class Game {
         boolean settingsRunning = true;
         
         while(settingsRunning){
-            System.out.print(String.format("\n\033[1mCurrent Viewport Dimensions (VIEWPORT):" + RESET + " %dx%d (Recommended to be around 50x20)\n" +"\033[1mCurrent FPS (FIXED):" + RESET + " %d\n",
-                                        DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT, DEFAULT_FPS));
-            System.out.print("Type \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings or \033[38;5;196mback" + RESET + " to return.\n");
+            System.out.print(String.format("\n\033[1mCurrent Viewport Dimensions (VIEWPORT):" + RESET + " %dx%d (Recommended to be around 50x20)\n" + 
+                                        "\033[1mCurrent FPS (FIXED):" + RESET + " %d\n" + "\033[1mGamemode (NORMAL/ENDLESS):" + RESET + " %s\t*Endless - Never-ending with randomly generated maps\n",
+                                        DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT, 
+                                        DEFAULT_FPS,
+                                        GAMEMODE));
+            System.out.print("Type \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings.\n" + 
+                            "Type \033[38;5;196mGAMEMODE <mode>" + RESET + " to change gamemode.\n" +
+                            "Type \033[38;5;196mback" + RESET + " to return.\n");
+                            
             
             String[] parsed2 = scan.nextLine().split(" ");
             try{
@@ -406,20 +443,27 @@ public class Game {
                         if(width > 0 && height > 0){
                             DEFAULT_VIEWPORT_WIDTH = width;
                             DEFAULT_VIEWPORT_HEIGHT = height;
-                            System.out.print("Viewport settings succesfully changed!\n");
+                            System.out.print("Viewport settings succesfully changed to " + DEFAULT_VIEWPORT_WIDTH + "x" + DEFAULT_VIEWPORT_HEIGHT + "!\n");
                         }else{
                             System.out.print("Invalid input. Width and height must be greater than 0");
                         }
-
+                        break;
+                    case "gamemode":
+                        GAMEMODE = "Endless";
+                        System.out.print("Gamemode succesfully changed to " + GAMEMODE + "!\n");
                         break;
                     case "back":
                         settingsRunning = false;
                         break;
                     default:
-                        System.out.println("Invalid input. Use \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings or \033[38;5;196mback" + RESET + " to return.");
+                        System.out.print("Type \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings\n." + 
+                                        "Type \033[38;5;196mGAMEMODE <mode>" + RESET + " to change gamemode.\n" +
+                                        "Type \033[38;5;196mback" + RESET + " to return.\n");
                 }
             }catch(ArrayIndexOutOfBoundsException e){
-                System.out.println("Invalid input. Use \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings or \033[38;5;196mback" + RESET + " to return.");
+                System.out.print("Type \033[38;5;196mVIEWPORT <width>x<height>" + RESET + " to change viewport settings\n." + 
+                                "Type \033[38;5;196mGAMEMODE <mode>" + RESET + " to change gamemode.\n" +
+                                "Type \033[38;5;196mback" + RESET + " to return.\n");
             }
         }
     }
@@ -438,61 +482,83 @@ public class Game {
 
         System.out.println("\033[1;32mWelcome to Slitheria!" + RESET);
 
-            System.out.print("\033[1mAbout:\033[0m This is a side-scrolling text-based rogue-like game.\n" + 
-                            "       It features slithering your way through the tight abyss of \033[1mSlitheria\033[0m,\n" + 
-                            "       where you must utilize your surrounding to get to the goal.\n\n");
+        System.out.print("\033[1mAbout:\033[0m Slitheria is a side-scrolling text-based rogue-like game\n" + 
+                        "       where you must slither your way through the tight abyss of \033[1mSlitheria\033[0m,\n" + 
+                        "       utilizing your surroundings to get to the goal.\n\n");
 
         while(true){
-            System.out.print("===============================");
-            System.out.print("\n\033[1mPlay Map: \033[0mPlay <map_number>\n" +
-                            "\033[1mMap Preview: \033[0mPreview <map_number>\n" +
-                            "\033[1mSettings: \033[0mSettings\n" + 
+            System.out.print("===============================\n");
+            switch(GAMEMODE){
+                case "Normal":
+                System.out.print("\033[1mPlay: \033[0mPlay <map_number>\n" +
+                            "\033[1mMap Preview: \033[0mPreview <map_number>\n");
+                    break;
+                case "Endless":
+                System.out.print("\033[1mPlay: \033[0mPlay\n" +
+                            "\033[1mMap Preview: \033[0mN/A - Maps are randomly generated\n");
+            }
+            System.out.print("\033[1mSettings: \033[0mSettings\n" + 
                             "\033[1mHelp Page: \033[0mHelp\n");
 
             String input = scan.nextLine();
             String[] parsed = input.split(" ");
 
             switch(parsed[0].toLowerCase()){
-                case "0" :
-                    System.out.print("Generating Map " + parsed[1] + "...\n");
-                        for(int i = 0; i < 100; i++){
-                            Thread.sleep(35);
-                            System.out.print("\033[1000D");
-                            System.out.print(i + "%");
-                        }
-                        
-                        System.out.print("\nComplete!\n");
-                    Game gamea = new Game(new VisualizedMap("C:\\Users\\bened\\OneDrive\\Documents\\University\\Projects\\Project1-Slitheria\\Slitheria\\maps\\map" + parsed[1] +".txt", DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT));
-                    gamea.play();
-                    break;
                 case "play":
-                    if(parsed.length != 2){
+                    if(GAMEMODE.equals("Normal") && parsed.length != 2){
                         System.out.print("Usage: Play <map_number>\n");
                         continue;
                     }
+                    Game game;
+                    switch(GAMEMODE){
+                        case "Normal":
+                            map = new File(mapPath + "map" + parsed[1] + ".txt");
+                            if(map.exists() && !map.isDirectory()){
+                                System.out.print("Generating Map " + parsed[1] + "...\n\n");
+                                for(int i = 0; i < 101; i++){
+                                    Thread.sleep(35);
+                                    int width = (i+1)/4;
+                                    System.out.print("\033[1000D"); // move cursor left by 1000
+                                    System.out.print(i + "%");
 
-                    map = new File(mapPath + "map" + parsed[1] + ".txt");
-                    if(map.exists() && !map.isDirectory()){
-                        System.out.print("Generating Map " + parsed[1] + "...\n\n");
-                        for(int i = 0; i < 101; i++){
-                            Thread.sleep(35);
-                            int width = (i+1)/4;
-                            System.out.print("\033[1000D"); // move cursor left by 1000
-                            System.out.print(i + "%");
+                                    String bar = "[" + new String(new char[width]).replace("\0", "\033[48;5;255m \033[0m") + new String(new char[25 - width]).replace("\0", " ") + "]";
+                                    System.out.print("\033[1B\033[1000D"); // move cursor down by 1 and left by 1000
+                                    System.out.print(bar);
+                                    System.out.print("\033[1A");    // move cursor up by 1
+                                }
+                                
+                                System.out.print("\033[3B\n\033[1mComplete!\n\033[0m");
+                                Thread.sleep(100);
 
-                            String bar = "[" + new String(new char[width]).replace("\0", "\033[48;5;255m \033[0m") + new String(new char[25 - width]).replace("\0", " ") + "]";
-                            System.out.print("\033[1B\033[1000D"); // move cursor down by 1 and left by 1000
-                            System.out.print(bar);
-                            System.out.print("\033[1A");    // move cursor up by 1
-                        }
-                        
-                        System.out.print("\033[3B\n\033[1mComplete!\n\033[0m");
-                        Thread.sleep(100);
+                                game = new Game(new VisualizedMap(new File(map.getAbsolutePath()), DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT));
+                                game.play();
+                            }else{
+                                System.out.println("Map " + parsed[1] + " not found!");
+                            }
+                            break;
+                        case "Endless":
+                            System.out.print("In this gamemode, every level will be procedurally generated, and levels will be \033[38;1;196mendless.\n" + RESET);
+                            System.out.print("Streak: " + STREAK + "\n");
+                            
+                            System.out.print("Generating Map(s)...\n\n");
+                                for(int i = 0; i < 101; i++){
+                                    Thread.sleep(35);
+                                    int width = (i+1)/4;
+                                    System.out.print("\033[1000D"); // move cursor left by 1000
+                                    System.out.print(i + "%");
 
-                        Game game = new Game(new VisualizedMap(map.getAbsolutePath(), DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT));
-                        game.play();
-                    }else{
-                        System.out.println("Map " + parsed[1] + " not found!");
+                                    String bar = "[" + new String(new char[width]).replace("\0", "\033[48;5;255m \033[0m") + new String(new char[25 - width]).replace("\0", " ") + "]";
+                                    System.out.print("\033[1B\033[1000D"); // move cursor down by 1 and left by 1000
+                                    System.out.print(bar);
+                                    System.out.print("\033[1A");    // move cursor up by 1
+                                }
+                                
+                                System.out.print("\033[3B\n\033[1mComplete!\n\033[0m");
+                                Thread.sleep(100);
+                            MG gen = new MG();
+                            game = new Game(new VisualizedMap(gen.mapString, DEFAULT_VIEWPORT_WIDTH, DEFAULT_VIEWPORT_HEIGHT));
+                            
+                            game.play();
                     }
                     break;
 

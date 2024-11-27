@@ -3,13 +3,40 @@ import java.io.IOException;
 import java.util.*;
 import java.io.File;
 
-public class MapGenerator {
+public class MG {
     private static final char WALL = '#';
     private static final char EMPTY = '+';
     private static final char SPIKE = '*';
     private static final char GOAL = ':';
     private static final char PLAYER = 'x';
+    public String mapString = "";
     
+    public MG() {
+        Random rand = new Random();
+        
+        // Define dimension bounds
+        final int MIN_WIDTH = 500;
+        final int MAX_WIDTH = 600;
+        final int MIN_HEIGHT = 500;
+        final int MAX_HEIGHT = 600;
+        
+        // Generate uniform dimensions
+        int width = MIN_WIDTH + (int)(rand.nextDouble() * (MAX_WIDTH - MIN_WIDTH));
+        int height = MIN_HEIGHT + (int)(rand.nextDouble() * (MAX_HEIGHT - MIN_HEIGHT));
+        
+        // Ensure dimensions are even for better symmetry
+        width = width - (width % 2);
+        height = height - (height % 2);
+        
+        mapString = generateMap(width, height);
+        // Debug print
+        System.out.println("Generated map first few lines:");
+        String[] lines = mapString.split("\n");
+        for(int i = 0; i < Math.min(5, lines.length); i++) {
+            System.out.println("Line " + i + ": " + lines[i]);
+        }
+    }
+
     static class Cell {
         Set<Character> possibilities;
         char value;
@@ -412,9 +439,9 @@ public class MapGenerator {
 
     public static String generateMap(int width, int height) {
         StringBuilder mapContent = new StringBuilder();
-        mapContent.append("Standard " + height + "x" + width + " map with obstacles.\n");
-        mapContent.append(height + "\n");
+        mapContent.append("Standard " + width + "x" + height + " map with obstacles.\n");
         mapContent.append(width + "\n");
+        mapContent.append(height + "\n");
 
         Cell[][] grid = new Cell[height][width];
         Random rand = new Random();
@@ -423,6 +450,11 @@ public class MapGenerator {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 grid[y][x] = new Cell();
+
+                // Bias towards empty spaces
+                if (rand.nextDouble() < 0.4){
+                    grid[y][x].possibilities.remove(WALL);
+                }
             }
         }
 
@@ -451,6 +483,12 @@ public class MapGenerator {
             // Randomly choose from possible values
             List<Character> possible = new ArrayList<>(cell.possibilities);
             char chosenValue = possible.get(rand.nextInt(possible.size()));
+
+            // Reduce spike probability
+            if(chosenValue == SPIKE && rand.nextDouble() < 0.7){
+                chosenValue = EMPTY; // Convert some spikes to empty spaces
+            }
+
             collapse(grid, minEntropyPos.x, minEntropyPos.y, chosenValue);
             
             // Propagate constraints
@@ -487,8 +525,8 @@ public class MapGenerator {
         
         // First line is description, next two lines are height and width
         String description = lines[0];
-        int height = Integer.parseInt(lines[1]);
-        int width = Integer.parseInt(lines[2]);
+        int width = Integer.parseInt(lines[1]);
+        int height = Integer.parseInt(lines[2]);
         
         // Create map from subsequent lines
         char[][] map = new char[height][width];
@@ -497,8 +535,8 @@ public class MapGenerator {
         }
         
         // Spike reduction parameters
-        int MAX_CLUSTER_SIZE = 0;  // Maximum allowed spikes in a cluster
-        double SPIKE_REDUCTION_PROBABILITY = 1.0; // Probability of removing excess spikes
+        int MAX_CLUSTER_SIZE = 1;  // Maximum allowed spikes in a cluster
+        double SPIKE_REDUCTION_PROBABILITY = 2.0; // Probability of removing excess spikes
         
         // Identify and process spike clusters
         for (int y = 1; y < height - 1; y++) {
@@ -538,8 +576,8 @@ public class MapGenerator {
         // Rebuild mapContent with modified map
         mapContent.setLength(0);  // Clear existing content
         mapContent.append(description).append("\n");
-        mapContent.append(height).append("\n");
         mapContent.append(width).append("\n");
+        mapContent.append(height).append("\n");
         
         for (char[] row : map) {
             mapContent.append(row).append('\n');
@@ -595,27 +633,26 @@ public class MapGenerator {
         Random rand = new Random();
         
         // Define dimension bounds
-        final int MIN_WIDTH = 75;
-        final int MAX_WIDTH = 100;
-        final int MIN_HEIGHT = 75;
-        final int MAX_HEIGHT = 100;
+        final int MIN_WIDTH = 100;
+        final int MAX_WIDTH = 200;
+        final int MIN_HEIGHT = 100;
+        final int MAX_HEIGHT = 200;
         
-        // Generate multiple maps
-        for (int i = 0; i < 2; i++) {
-            // Generate uniform dimensions
-            int width = MIN_WIDTH + (int)(rand.nextDouble() * (MAX_WIDTH - MIN_WIDTH));
-            int height = MIN_HEIGHT + (int)(rand.nextDouble() * (MAX_HEIGHT - MIN_HEIGHT));
-            
-            // Ensure dimensions are even for better symmetry (optional)
-            width = width - (width % 2);
-            height = height - (height % 2);
-            
-            String mapContent = generateMap(width, height);
-            if (mapContent != null) {
-                saveNewMap(mapContent);  // Call static method directly
-            }
-            
-            System.out.println("Generated map with dimensions: " + width + "x" + height);
+        // Generate uniform dimensions
+        int width = MIN_WIDTH + (int)(rand.nextDouble() * (MAX_WIDTH - MIN_WIDTH));
+        int height = MIN_HEIGHT + (int)(rand.nextDouble() * (MAX_HEIGHT - MIN_HEIGHT));
+        
+        // Ensure dimensions are even for better symmetry (optional)
+        width = width - (width % 2);
+        height = height - (height % 2);
+        
+        // Use only to statically generate maps
+        double startTime = System.currentTimeMillis();
+        String mapString = generateMap(150, 150);
+        double endTime = System.currentTimeMillis();
+        System.out.println("Time taken: " + (endTime - startTime)/1000 + "seconds");
+        if (mapString != null) {
+            saveNewMap(mapString);  // Call static method directly
         }
     }
 }
