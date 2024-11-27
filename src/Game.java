@@ -449,9 +449,18 @@ public class Game {
                         }
                         break;
                     case "gamemode":
-                        GAMEMODE = "Endless";
-                        System.out.print("Gamemode succesfully changed to " + GAMEMODE + "!\n");
-                        break;
+                        switch(parsed[1]){
+                            case "Endless":
+                                GAMEMODE = "Endless";
+                                System.out.print("Gamemode succesfully changed to " + GAMEMODE + "!\n");
+                                break;
+                            case "Normal":
+                                GAMEMODE = "Normal";
+                                break;
+                                System.out.print("Gamemode succesfully changed to " + GAMEMODE + "!\n");
+                            default:
+                                System.out.print("Invalid input. Gamemode can only be either \033[38;5;196mEndless" + RESET + " \033[38;5;196mNormal\n " + RESET);
+                        }
                     case "back":
                         settingsRunning = false;
                         break;
